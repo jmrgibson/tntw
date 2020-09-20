@@ -6,16 +6,16 @@ use bevy::{
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
-
 fn main() {
     App::build()
         .add_default_plugins()
         // .add_resource(Scoreboard { score: 0 })
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .init_resource::<InputState>()
+        .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_startup_system(setup.system())
         .add_system(unit_movement_system.system())
-        .add_system(bevy::input::system::exit_on_esc_system.system())
+        .add_system(cursor_system.system())
         .add_system(input_system.system())
         // .add_system(ball_collision_system.system())
         // .add_system(ball_movement_system.system())
@@ -40,6 +40,8 @@ impl FromResources for SelectionMaterials {
     }
 }
 
+type XyPos = Vec2;
+
 enum UnitState {
     Idle,
     Firing,
@@ -48,8 +50,18 @@ enum UnitState {
     MovingSlow(Waypoint),
 }
 
+#[derive(Clone)]
+enum UnitCommands {
+    AttackFast,
+    AttackSlow,
+    MoveFast(XyPos),
+    MoveSlow(XyPos),
+    Stop,
+}
+
 pub enum Waypoint {
-    Position(Vec2)
+    Position(XyPos),
+    Unit,
 }
 
 struct Unit {
@@ -63,8 +75,20 @@ impl Unit {
 
     }
 
+    fn process_command(&mut self, cmd: UnitCommands) {
+        use UnitCommands::*;
+        match cmd {
+            AttackFast | AttackSlow => {},
+            Stop => self.state = UnitState::Idle,
+            MoveFast(pos) | MoveSlow(pos) => self.state = UnitState::MovingSlow(Waypoint::Position(pos)),
+        }
+    }
     fn select(&mut self) {
         self.is_selected = true;
+    }
+
+    pub fn is_selected(&self) -> bool {
+        self.is_selected
     }
 }
 
@@ -73,7 +97,8 @@ impl Default for Unit {
         Unit {
             state: UnitState::MovingSlow(Waypoint::Position((50.0, 50.0).into())),
             max_speed: 50.0,
-            is_selected: false,
+            // TODO implement selection
+            is_selected: true,
         }
     }
 }
@@ -105,37 +130,56 @@ impl Default for InputState {
 
 fn input_system(
     mut state: ResMut<InputState>,
+    cursor: Res<CursorState>,
     ev_keys: Res<Events<KeyboardInput>>,
     ev_cursor: Res<Events<CursorMoved>>,
     ev_motion: Res<Events<MouseMotion>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     ev_scroll: Res<Events<MouseWheel>>,
+    mut query: Query<&mut Unit>,
 ) {
+    let mut new_command: Option<UnitCommands> = None;
+
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
         if ev.state.is_pressed() {
             eprintln!("Just pressed key: {:?}", ev.key_code);
+            if let Some(key) = ev.key_code {
+                if key == KeyCode::S {
+                    new_command.replace(UnitCommands::Stop);
+                }
+            }
         } else {
-            eprintln!("Just released key: {:?}", ev.key_code);
+            
         }
     }
 
     // Absolute cursor position (in window coordinates)
-    for ev in state.cursor.iter(&ev_cursor) {
+    // for ev in state.cursor.iter(&ev_cursor) {
         // eprintln!("Cursor at: {}", ev.position);
-    }
+    // }
 
     // Relative mouse motion
-    for ev in state.motion.iter(&ev_motion) {
+    // for ev in state.motion.iter(&ev_motion) {
         // eprintln!("Mouse moved {} pixels", ev.delta);
-    }
+    // }
+
+
 
     // Mouse buttons
     for ev in state.mousebtn.iter(&ev_mousebtn) {
         if ev.state.is_pressed() {
-            eprintln!("Just pressed mouse button: {:?}", ev.button);
+            // process select
+            // eprintln!("Just pressed mouse button: {:?}", ev.button);
         } else {
-            eprintln!("Just released mouse button: {:?}", ev.button);
+            // eprintln!("Just released mouse button: {:?}", ev.button);
+            // process on release
+            // TODO handle left/right click
+
+            // get last cursor position 
+            let position = cursor.last_pos.clone();
+
+            new_command.replace(UnitCommands::MoveSlow(position));
         }
     }
 
@@ -143,17 +187,28 @@ fn input_system(
     for ev in state.scroll.iter(&ev_scroll) {
         eprintln!("Scrolled vertically by {} and horizontally by {}.", ev.y, ev.x);
     }
+
+    if let Some(cmd) = new_command {
+        for mut unit in &mut query.iter() {
+            if unit.is_selected() {
+                unit.process_command(cmd.clone());
+            }
+        }
+    }
+
 }
-struct MyCursorState {
+struct CursorState {
     cursor: EventReader<CursorMoved>,
     // need to identify the main camera
     camera_e: Entity, 
+    last_pos: XyPos,
 }
 
 
-// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation does it
+/// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation stores it
+/// so that it can be accesed by the input system
 fn cursor_system(
-    mut state: ResMut<MyCursorState>,
+    mut state: ResMut<CursorState>,
     ev_cursor: Res<Events<CursorMoved>>,
     // need to get window dimensions
     wnds: Res<Windows>,
@@ -174,8 +229,8 @@ fn cursor_system(
         // apply the camera transform
         let pos_wld = camera_transform.value().clone() * p.extend(0.0).extend(1.0);
 
-        // somehow figure out what sprite is here?
-        eprintln!("World coords: {}/{}", pos_wld.x(), pos_wld.y());
+        *state.last_pos.x_mut() = pos_wld.x();
+        *state.last_pos.y_mut() = pos_wld.y();
     }
 }
 
@@ -280,6 +335,16 @@ fn setup(
         // })
         ;
 
+
+    // set up cursor tracker
+    let camera = Camera2dComponents::default();
+    let e = commands.spawn(camera).current_entity().unwrap();
+    commands.insert_resource(CursorState {
+        cursor: Default::default(),
+        camera_e: e,
+        last_pos: XyPos::default(),
+    });
+
     // Add walls
     let wall_material = materials.add(Color::rgb(0.5, 0.5, 0.5).into());
     let wall_thickness = 10.0;
@@ -356,46 +421,13 @@ fn unit_movement_system(
 ) {
     for (mut unit, mut transform) in &mut query.iter() {
         match &mut unit.state {
-
-
             UnitState::MovingSlow(waypoint) => {
-                match waypoint {
-                    Waypoint::Position(wpos) => {
-                        // move the waypoint
-                        let mut x_direction = 0.0;
-                        let mut y_direction = 0.0;
-                        if keyboard_input.pressed(KeyCode::Up) {
-                            y_direction += 1.0;
-                        }
-
-                        if keyboard_input.pressed(KeyCode::Down) {
-                            y_direction -= 1.0;
-                        }
-
-                        if keyboard_input.pressed(KeyCode::Left) {
-                            x_direction -= 1.0;
-                        }
-
-
-                        if keyboard_input.pressed(KeyCode::Right) {
-                            x_direction += 1.0;
-                        }
-
-                        // move the waypoint 
-                        *wpos.x_mut() += time.delta_seconds * x_direction * 10.0;
-                        *wpos.y_mut() += time.delta_seconds * y_direction * 10.0;
-                        // bound the waypoint within the walls
-                        *wpos.x_mut() = wpos.x().min(380.0).max(-380.0);
-                        *wpos.y_mut() = wpos.y().min(380.0).max(-380.0);
-                    },
-                }
-
-                // move unit (with its own translation)
-                let translation = transform.translation_mut();
-                if let UnitState::MovingSlow(Waypoint::Position(wpos)) = unit.state {
+                if let Waypoint::Position(wpos) = waypoint {
+                    // move unit (with its own translation) 
+                    let translation = transform.translation_mut();
                     // get direction and normalize
-                    let pos: Vec2 = (translation.x(), translation.y()).into();
-                    let direction =  (wpos - pos).normalize();
+                    let pos: XyPos = (translation.x(), translation.y()).into();
+                    let direction =  (wpos.clone() - pos).normalize();
                     // translation
                     *translation.x_mut() = translation.x() + direction.x();
                     *translation.y_mut() = translation.y() + direction.y();

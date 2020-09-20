@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies]
 bevy = "0.2.0" 
-bevy_input = "0.2.0" 
+bevy_input = "0.2.0"
+log = "0.4" 
