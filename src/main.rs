@@ -12,9 +12,11 @@ fn main() {
         .add_default_plugins()
         // .add_resource(Scoreboard { score: 0 })
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
+        .init_resource::<InputState>()
         .add_startup_system(setup.system())
         .add_system(unit_movement_system.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
+        .add_system(input_system.system())
         // .add_system(ball_collision_system.system())
         // .add_system(ball_movement_system.system())
         // .add_system(scoreboard_system.system())
@@ -89,7 +91,19 @@ struct InputState {
     scroll: EventReader<MouseWheel>,
 }
 
-fn my_input_system(
+impl Default for InputState {
+    fn default() -> Self {
+        InputState {
+            keys: EventReader::default(),
+            cursor: EventReader::default(),
+            motion: EventReader::default(),
+            mousebtn: EventReader::default(),
+            scroll: EventReader::default(),
+        }
+    }
+}
+
+fn input_system(
     mut state: ResMut<InputState>,
     ev_keys: Res<Events<KeyboardInput>>,
     ev_cursor: Res<Events<CursorMoved>>,
