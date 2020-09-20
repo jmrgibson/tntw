@@ -3,6 +3,9 @@ use bevy::{
     render::pass::ClearColor,
     sprite::collide_aabb::{collide, Collision},
 };
+use bevy_input::keyboard::*;
+use bevy_input::mouse::*;
+
 
 fn main() {
     App::build()
@@ -11,10 +14,28 @@ fn main() {
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .add_startup_system(setup.system())
         .add_system(unit_movement_system.system())
+        .add_system(bevy::input::system::exit_on_esc_system.system())
         // .add_system(ball_collision_system.system())
         // .add_system(ball_movement_system.system())
         // .add_system(scoreboard_system.system())
         .run();
+}
+
+struct SelectionMaterials {
+    normal: Handle<ColorMaterial>,
+    hovered: Handle<ColorMaterial>,
+    selected: Handle<ColorMaterial>,
+}
+
+impl FromResources for SelectionMaterials {
+    fn from_resources(resources: &Resources) -> Self {
+        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().unwrap();
+        SelectionMaterials {
+            normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
+            hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
+            selected: materials.add(Color::rgb(0.1, 0.5, 0.1).into()),
+        }
+    }
 }
 
 enum UnitState {
@@ -32,11 +53,16 @@ pub enum Waypoint {
 struct Unit {
     state: UnitState,
     max_speed: f32,
+    is_selected: bool,
 }
 
 impl Unit {
     fn assign_waypoint() {
 
+    }
+
+    fn select(&mut self) {
+        self.is_selected = true;
     }
 }
 
@@ -45,6 +71,7 @@ impl Default for Unit {
         Unit {
             state: UnitState::MovingSlow(Waypoint::Position((50.0, 50.0).into())),
             max_speed: 50.0,
+            is_selected: false,
         }
     }
 }
@@ -53,6 +80,124 @@ impl Default for Unit {
 enum Collider {
     Solid,
 }
+
+struct InputState {
+    keys: EventReader<KeyboardInput>,
+    cursor: EventReader<CursorMoved>,
+    motion: EventReader<MouseMotion>,
+    mousebtn: EventReader<MouseButtonInput>,
+    scroll: EventReader<MouseWheel>,
+}
+
+fn my_input_system(
+    mut state: ResMut<InputState>,
+    ev_keys: Res<Events<KeyboardInput>>,
+    ev_cursor: Res<Events<CursorMoved>>,
+    ev_motion: Res<Events<MouseMotion>>,
+    ev_mousebtn: Res<Events<MouseButtonInput>>,
+    ev_scroll: Res<Events<MouseWheel>>,
+) {
+    // Keyboard input
+    for ev in state.keys.iter(&ev_keys) {
+        if ev.state.is_pressed() {
+            eprintln!("Just pressed key: {:?}", ev.key_code);
+        } else {
+            eprintln!("Just released key: {:?}", ev.key_code);
+        }
+    }
+
+    // Absolute cursor position (in window coordinates)
+    for ev in state.cursor.iter(&ev_cursor) {
+        // eprintln!("Cursor at: {}", ev.position);
+    }
+
+    // Relative mouse motion
+    for ev in state.motion.iter(&ev_motion) {
+        // eprintln!("Mouse moved {} pixels", ev.delta);
+    }
+
+    // Mouse buttons
+    for ev in state.mousebtn.iter(&ev_mousebtn) {
+        if ev.state.is_pressed() {
+            eprintln!("Just pressed mouse button: {:?}", ev.button);
+        } else {
+            eprintln!("Just released mouse button: {:?}", ev.button);
+        }
+    }
+
+    // scrolling (mouse wheel, touchpad, etc.)
+    for ev in state.scroll.iter(&ev_scroll) {
+        eprintln!("Scrolled vertically by {} and horizontally by {}.", ev.y, ev.x);
+    }
+}
+struct MyCursorState {
+    cursor: EventReader<CursorMoved>,
+    // need to identify the main camera
+    camera_e: Entity, 
+}
+
+
+// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation does it
+fn cursor_system(
+    mut state: ResMut<MyCursorState>,
+    ev_cursor: Res<Events<CursorMoved>>,
+    // need to get window dimensions
+    wnds: Res<Windows>,
+    // query to get camera components
+    q_camera: Query<&Transform>
+) {
+    let camera_transform = q_camera.get::<Transform>(state.camera_e).unwrap();
+
+    for ev in state.cursor.iter(&ev_cursor) {
+        // get the size of the window that the event is for
+        let wnd = wnds.get(ev.id).unwrap();
+        let size = Vec2::new(wnd.width as f32, wnd.height as f32);
+
+        // the default orthographic projection is in pixels from the center;
+        // just undo the translation
+        let p = ev.position - size / 2.0;
+
+        // apply the camera transform
+        let pos_wld = camera_transform.value().clone() * p.extend(0.0).extend(1.0);
+
+        // somehow figure out what sprite is here?
+        eprintln!("World coords: {}/{}", pos_wld.x(), pos_wld.y());
+    }
+}
+
+fn selection_system(
+    button_materials: Res<SelectionMaterials>,
+    mut interaction_query: Query<(
+        &Button,
+        Mutated<Interaction>,
+        &mut Handle<ColorMaterial>,
+        &mut Unit,
+        &Children,
+    )>,
+    text_query: Query<&mut Text>,
+) {
+    for (_button, interaction, mut material, mut unit, children) in &mut interaction_query.iter() {
+        let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
+        match *interaction {
+            Interaction::Clicked => {
+                unit.select();
+            }
+            Interaction::Hovered => {
+                text.value = "Select?".to_string();
+                *material = button_materials.hovered;
+            }
+            Interaction::None => (),
+        }
+    }
+}
+
+// fn command_system(
+//     mut interaction_query: Query<(
+//         &mut Unit
+//     )>
+// ) {
+
+// }
 
 fn setup(
     mut commands: Commands,
@@ -82,6 +227,21 @@ fn setup(
             ..Default::default()
         })
         .with(Unit::default())
+        // .with(ButtonComponents {
+        //         style: Style {
+        //             size: Size::new(Val::Px(150.0), Val::Px(65.0)),
+        //             // center button
+        //             margin: Rect::all(Val::Auto),
+        //             // horizontally center child text
+        //             justify_content: JustifyContent::Center,
+        //             // vertically center child text
+        //             align_items: AlignItems::Center,
+        //             ..Default::default()
+        //         },
+        //         material: materials.unse;ec,
+        //         ..Default::default()
+        //     }
+        // )
 
         // scoreboard
         // .spawn(TextComponents {
