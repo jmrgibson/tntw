@@ -6,6 +6,8 @@ use bevy::{
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
+const WALKING_SPEED_FACTOR: f32 = 0.5;
+
 fn main() {
     App::build()
         .add_default_plugins()
@@ -46,7 +48,7 @@ enum UnitState {
     Idle,
     Firing,
     Melee,
-    MovingFast,
+    MovingFast(Waypoint),
     MovingSlow(Waypoint),
 }
 
@@ -56,9 +58,11 @@ enum UnitCommands {
     AttackSlow,
     MoveFast(XyPos),
     MoveSlow(XyPos),
+    ToggleSpeed,
     Stop,
 }
 
+#[derive(Clone)]
 pub enum Waypoint {
     Position(XyPos),
     Unit,
@@ -81,10 +85,21 @@ impl Unit {
             AttackFast | AttackSlow => {},
             Stop => self.state = UnitState::Idle,
             MoveFast(pos) | MoveSlow(pos) => self.state = UnitState::MovingSlow(Waypoint::Position(pos)),
+            ToggleSpeed => {
+                match &self.state {
+                    UnitState::MovingFast(wp) => self.state = UnitState::MovingSlow(wp.clone()),
+                    UnitState::MovingSlow(wp) => self.state = UnitState::MovingFast(wp.clone()),
+                    _ => (),
+                }
+            }
         }
     }
     fn select(&mut self) {
         self.is_selected = true;
+    }
+
+    fn deselect(&mut self) {
+        self.is_selected = false;
     }
 
     pub fn is_selected(&self) -> bool {
@@ -96,7 +111,7 @@ impl Default for Unit {
     fn default() -> Self {
         Unit {
             state: UnitState::MovingSlow(Waypoint::Position((50.0, 50.0).into())),
-            max_speed: 50.0,
+            max_speed: 5.0,
             // TODO implement selection
             is_selected: true,
         }
@@ -138,33 +153,24 @@ fn input_system(
     ev_scroll: Res<Events<MouseWheel>>,
     mut query: Query<&mut Unit>,
 ) {
-    let mut new_command: Option<UnitCommands> = None;
+    let mut new_commands: Vec<UnitCommands> = Vec::new();
 
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
         if ev.state.is_pressed() {
-            eprintln!("Just pressed key: {:?}", ev.key_code);
+            // eprintln!("Just pressed key: {:?}", ev.key_code);
             if let Some(key) = ev.key_code {
-                if key == KeyCode::S {
-                    new_command.replace(UnitCommands::Stop);
-                }
+                match key {
+                    KeyCode::S => new_commands.push(UnitCommands::Stop), 
+                    KeyCode::R => new_commands.push(UnitCommands::ToggleSpeed), 
+                    _ => (),
+                };
+
             }
         } else {
             
         }
     }
-
-    // Absolute cursor position (in window coordinates)
-    // for ev in state.cursor.iter(&ev_cursor) {
-        // eprintln!("Cursor at: {}", ev.position);
-    // }
-
-    // Relative mouse motion
-    // for ev in state.motion.iter(&ev_motion) {
-        // eprintln!("Mouse moved {} pixels", ev.delta);
-    // }
-
-
 
     // Mouse buttons
     for ev in state.mousebtn.iter(&ev_mousebtn) {
@@ -179,7 +185,11 @@ fn input_system(
             // get last cursor position 
             let position = cursor.last_pos.clone();
 
-            new_command.replace(UnitCommands::MoveSlow(position));
+            if ev.button == MouseButton::Right {
+                new_commands.push(UnitCommands::MoveSlow(position));
+            } else if ev.button == MouseButton::Left  {
+
+            }
         }
     }
 
@@ -188,7 +198,7 @@ fn input_system(
         eprintln!("Scrolled vertically by {} and horizontally by {}.", ev.y, ev.x);
     }
 
-    if let Some(cmd) = new_command {
+    for cmd in new_commands {
         for mut unit in &mut query.iter() {
             if unit.is_selected() {
                 unit.process_command(cmd.clone());
@@ -420,21 +430,45 @@ fn unit_movement_system(
     mut query: Query<(&mut Unit, &mut Transform)>,
 ) {
     for (mut unit, mut transform) in &mut query.iter() {
-        match &mut unit.state {
+        // move unit (with its own translation) 
+        let translation = transform.translation_mut();
+
+        let (direction, speed_factor) = match &mut unit.state {
             UnitState::MovingSlow(waypoint) => {
                 if let Waypoint::Position(wpos) = waypoint {
-                    // move unit (with its own translation) 
-                    let translation = transform.translation_mut();
                     // get direction and normalize
                     let pos: XyPos = (translation.x(), translation.y()).into();
                     let direction =  (wpos.clone() - pos).normalize();
-                    // translation
-                    *translation.x_mut() = translation.x() + direction.x();
-                    *translation.y_mut() = translation.y() + direction.y();
+                    
+                    let speed_factor = unit.max_speed * WALKING_SPEED_FACTOR;
+
+                    (direction, speed_factor)
+                } else {
+                    unimplemented!();
                 }
             },
-            _ => (),
-        }
+            UnitState::MovingFast(waypoint) => {
+                if let Waypoint::Position(wpos)  = waypoint {
+                    // get direction and normalize
+                    let pos: XyPos = (translation.x(), translation.y()).into();
+                    let direction =  (wpos.clone() - pos).normalize();
+                    
+                    let speed_factor = unit.max_speed;
+
+                    (direction, speed_factor)
+                } else {
+                    unimplemented!();
+                }
+            }
+            UnitState::Idle => {
+                (Vec2::from((0.0, 0.0)), 0.0)
+            }
+            _ => unimplemented!()
+        };
+
+        // translation
+        *translation.x_mut() = translation.x() + (direction.x() * speed_factor);
+        *translation.y_mut() = translation.y() + (direction.y() * speed_factor);
 
     }
 }
