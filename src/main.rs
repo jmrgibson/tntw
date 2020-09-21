@@ -327,6 +327,10 @@ fn cursor_system(
     }
 }
 
+
+// TODO have a separate component for waypoint position for all command types
+// that is updated in a separate system, so its calculated separately from the unit movement system
+// so we don't run into unique borrow issues
 fn unit_movement_system(
     time: Res<Time>,
     mut unit_query: Query<(&mut Unit, &mut Transform)>,
