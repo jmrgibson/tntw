@@ -10,16 +10,17 @@ an AI opponent.
 
 - Left click to select units
 - Right click to set unit waypoint while selected
+- Units should move towards waypoint, and then transition to idle once they arrive
 - "S" to stop unit
 - "R" to toggle run/walk
 - "ESC" to quit
 
 ## Coming soon(tm)
 
-- Units transition to idle once they reach their way point
-- different UI for selected units?
+- different icon for selected/unselected units
 - UI for unit state
 - More than one unit
+- Ability to select more than one unit
 
 ## Why?
 

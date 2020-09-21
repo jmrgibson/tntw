@@ -8,7 +8,7 @@ use bevy_input::mouse::*;
 
 use tntw::{Waypoint, UnitState, UnitCommands, Unit, XyPos};
 
-const WALKING_SPEED_FACTOR: f32 = 0.5;
+
 
 fn main() {
     env_logger::init();
@@ -356,51 +356,39 @@ fn setup(
     // }
 }
 
+ 
+
+
 fn unit_movement_system(
     time: Res<Time>,
-    keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<(&mut Unit, &mut Transform)>,
 ) {
     for (mut unit, mut transform) in &mut query.iter() {
         let translation = transform.translation_mut();
 
-        let (direction, speed_factor) = match &mut unit.state {
-            UnitState::MovingSlow(waypoint) => {
-                if let Waypoint::Position(wpos) = waypoint {
-                    // get direction and normalize
-                    let pos: XyPos = (translation.x(), translation.y()).into();
-                    let direction =  (wpos.clone() - pos).normalize();
-                    
-                    let speed_factor = unit.max_speed() * WALKING_SPEED_FACTOR;
-
-                    (direction, speed_factor)
-                } else {
-                    unimplemented!();
-                }
-            },
-            UnitState::MovingFast(waypoint) => {
-                if let Waypoint::Position(wpos)  = waypoint {
-                    // get direction and normalize
-                    let pos: XyPos = (translation.x(), translation.y()).into();
-                    let direction =  (wpos.clone() - pos).normalize();
-                    
-                    let speed_factor = unit.max_speed();
-
-                    (direction, speed_factor)
-                } else {
-                    unimplemented!();
-                }
+        // if the unit is going somewhere
+        if let Some(relative_position) = unit.pos_rel_to_waypoint(translation){
+            let unit_distance = unit.current_speed() * time.delta_seconds;
+        
+            // using length_squared() for totally premature optimization
+            let rel_distance_sq = relative_position.length_squared();
+    
+            // if we need to keep moving
+            if unit_distance.powi(2) < rel_distance_sq {
+                // get direction
+                let direction = relative_position.normalize();
+    
+                // perform translation
+                *translation.x_mut() = translation.x() + (direction.x() * unit_distance);
+                *translation.y_mut() = translation.y() + (direction.y() * unit_distance);
+            } else {
+                // can reach destination, set position to waypoint, transition to idle
+                *translation.x_mut() = translation.x() + relative_position.x();
+                *translation.y_mut() = translation.y() + relative_position.y();
+                log::debug!("reached destination");
+                unit.state = UnitState::Idle;
             }
-            UnitState::Idle => {
-                (Vec2::from((0.0, 0.0)), 0.0)
-            }
-            _ => unimplemented!()
-        };
-
-        // translation
-        *translation.x_mut() = translation.x() + (direction.x() * speed_factor);
-        *translation.y_mut() = translation.y() + (direction.y() * speed_factor);
-
+        }
     }
 }
 

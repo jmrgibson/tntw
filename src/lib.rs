@@ -5,6 +5,8 @@ use bevy::{
     sprite::collide_aabb::{collide, Collision},
 };
 
+const WALKING_SPEED_FACTOR: f32 = 0.5;
+
 #[derive(Clone)]
 pub enum Waypoint {
     Position(XyPos),
@@ -86,13 +88,41 @@ impl Unit {
     pub fn max_speed(&self) -> f32 {
         self.max_speed
     }
+
+    pub fn current_speed(&self) -> f32 {
+        match self.state {
+            UnitState::MovingSlow(_) => self.max_speed * WALKING_SPEED_FACTOR,
+            UnitState::MovingFast(_) => self.max_speed,
+            _ => 0.0,
+        }
+    }
+
+    /// returns the relative translation of a given position from the units waypoint
+    pub fn pos_rel_to_waypoint(&self, current_pos: &Vec4) -> Option<Vec2> {
+        match &self.state {
+            UnitState::MovingSlow(waypoint) | UnitState::MovingFast(waypoint) => {
+                if let Waypoint::Position(wpos) = waypoint {
+                    // get direction and normalize
+                    let pos: XyPos = (current_pos.x(), current_pos.y()).into();
+                    Some(wpos.clone() - pos)
+                } else {
+                    unimplemented!();
+                }
+            },
+            UnitState::Idle => {
+                None
+            }
+            _ => unimplemented!()
+        }
+    }
+
 }
 
 impl Default for Unit {
     fn default() -> Self {
         Unit {
             state: UnitState::Idle,
-            max_speed: 5.0,
+            max_speed: 50.0,
             is_selected: false,
         }
     }
