@@ -81,6 +81,11 @@ impl Unit {
         self.is_selected = false;
     }
 
+    pub fn invert_select(&mut self) {
+        log::debug!("Unit invert selected");
+        self.is_selected = !self.is_selected;
+    }
+
     pub fn is_selected(&self) -> bool {
         self.is_selected
     }

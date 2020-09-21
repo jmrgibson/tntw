@@ -55,6 +55,10 @@ struct InputState {
     motion: EventReader<MouseMotion>,
     mousebtn: EventReader<MouseButtonInput>,
     scroll: EventReader<MouseWheel>,
+    /// ie, ctrl+select
+    is_multi_select_on: bool, 
+    /// ie, shift+select
+    is_toggle_select_on: bool, 
 }
 
 impl Default for InputState {
@@ -65,6 +69,8 @@ impl Default for InputState {
             motion: EventReader::default(),
             mousebtn: EventReader::default(),
             scroll: EventReader::default(),
+            is_multi_select_on: false,
+            is_toggle_select_on: false,
         }
     }
 }
@@ -89,12 +95,21 @@ fn input_system(
                 match key {
                     KeyCode::S => new_commands.push(UnitCommands::Stop), 
                     KeyCode::R => new_commands.push(UnitCommands::ToggleSpeed), 
+                    KeyCode::LShift => state.is_toggle_select_on = true, 
+                    KeyCode::LControl => state.is_multi_select_on = true, 
                     _ => (),
                 };
-
+                
             }
         } else {
             // on release
+            if let Some(key) = ev.key_code {
+                match key {
+                    KeyCode::LShift => state.is_toggle_select_on = false,
+                    KeyCode::LControl => state.is_multi_select_on = false,
+                    _ => (),
+                }
+            }
             
         }
     }
@@ -131,14 +146,20 @@ fn input_system(
             // TODO there is most certainly a better way of doing this math
             if selection_pos.x() < (unit_pos.x() + sprite.size.x()) && selection_pos.x() > (unit_pos.x() - sprite.size.x()) && 
                 selection_pos.y() < (unit_pos.y() + sprite.size.y()) && selection_pos.y() > (unit_pos.y() - sprite.size.y()) {
-                unit.select();
+                if state.is_toggle_select_on {
+                    unit.invert_select();
+                } else {
+                    unit.select();
+                }   
             } else {
-                unit.deselect();
+                // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
+                if !(state.is_multi_select_on || state.is_toggle_select_on) {
+                    unit.deselect();
+                }
             }
         }
 
-
-        // send new commands to units
+        // send new commands to selected units
         for cmd in new_commands.clone() {
             if unit.is_selected() {
                 unit.process_command(cmd.clone());

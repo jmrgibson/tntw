@@ -9,6 +9,7 @@ an AI opponent.
 ## Implemented Features
 
 - Left click to select units
+- shift+lclick to toggle-select, ctrl+lclick to multi-select
 - Right click to set unit waypoint while selected
 - Units should move towards waypoint, and then transition to idle once they arrive
 - "S" to stop unit
@@ -19,8 +20,7 @@ an AI opponent.
 
 - different icon for selected/unselected units
 - UI for unit state
-- More than one unit
-- Ability to select more than one unit
+- unit waypoints to other units
 
 ## Why?
 
