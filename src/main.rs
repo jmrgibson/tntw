@@ -1,12 +1,13 @@
+#![allow(dead_code)]
+
 use bevy::{
     prelude::*,
     render::pass::ClearColor,
-    sprite::collide_aabb::{collide, Collision},
 };
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
-use tntw::{Waypoint, UnitState, UnitCommands, Unit, XyPos};
+use tntw::{UnitCurrentCommand, UnitState, UnitCommands, Unit, XyPos};
 
 
 
@@ -59,6 +60,8 @@ struct InputState {
     is_multi_select_on: bool, 
     /// ie, shift+select
     is_toggle_select_on: bool, 
+    /// should this be an option?
+    drag_select_start: XyPos,
 }
 
 impl Default for InputState {
@@ -71,8 +74,16 @@ impl Default for InputState {
             scroll: EventReader::default(),
             is_multi_select_on: false,
             is_toggle_select_on: false,
+            drag_select_start: (0.0, 0.0).into(),
         }
     }
+}
+
+/// TODO handle rotation, does this also handle dynamic sprite sizing?
+/// TODO there is most certainly a better way of doing this math
+fn is_position_within_sprite(position_to_check: XyPos, sprite_position: &Vec3, sprite: &Sprite) -> bool {
+    position_to_check.x() < (sprite_position.x() + sprite.size.x()) && position_to_check.x() > (sprite_position.x() - sprite.size.x()) && 
+    position_to_check.y() < (sprite_position.y() + sprite.size.y()) && position_to_check.y() > (sprite_position.y() - sprite.size.y()) 
 }
 
 fn input_system(
@@ -83,14 +94,14 @@ fn input_system(
     ev_motion: Res<Events<MouseMotion>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     ev_scroll: Res<Events<MouseWheel>>,
-    mut query: Query<(&mut Unit, &Transform, &Sprite)>,
+    mut query: Query<(Entity, &mut Unit, &Transform, &Sprite)>,
 ) {
     let mut new_commands: Vec<UnitCommands> = Vec::new();
 
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
         if ev.state.is_pressed() {
-            eprintln!("Just pressed key: {:?}", ev.key_code);
+            // on press
             if let Some(key) = ev.key_code {
                 match key {
                     KeyCode::S => new_commands.push(UnitCommands::Stop), 
@@ -114,7 +125,7 @@ fn input_system(
         }
     }
 
-    let mut maybe_selection_pos: Option<XyPos> = None;
+    let mut mouse_command_and_pos: Option<(MouseButton, XyPos)> = None;
 
     // Mouse buttons
     for ev in state.mousebtn.iter(&ev_mousebtn) {
@@ -130,44 +141,70 @@ fn input_system(
 
             if ev.button == MouseButton::Right {
                 log::trace!("Right click");
-                new_commands.push(UnitCommands::MoveSlow(position));
+                mouse_command_and_pos.replace((MouseButton::Right, position));
             } else if ev.button == MouseButton::Left  {
                 log::trace!("Left click");
-                maybe_selection_pos.replace(position);
+                mouse_command_and_pos.replace((MouseButton::Left, position));
             }
         }
     }
 
-    for (mut unit, transform, sprite) in &mut query.iter() {
-        if let Some(selection_pos) = maybe_selection_pos {
+    // 
+    let mut any_unit_clicked: Option<(Entity, MouseButton)> = None;
+    
+    // new_commands.push(UnitCommands::MoveSlow(position));
+    // determine if the mouse action was on a unit or not
+    if let Some((command, selection_pos)) = mouse_command_and_pos {
+        for (entity, mut unit, transform, sprite) in &mut query.iter() {
             let unit_pos = transform.translation();
-            // check selection position is within unit center + sprite size bounds
-            // TODO handle rotation, does this also handle dynamic sizing?
-            // TODO there is most certainly a better way of doing this math
-            if selection_pos.x() < (unit_pos.x() + sprite.size.x()) && selection_pos.x() > (unit_pos.x() - sprite.size.x()) && 
-                selection_pos.y() < (unit_pos.y() + sprite.size.y()) && selection_pos.y() > (unit_pos.y() - sprite.size.y()) {
-                if state.is_toggle_select_on {
-                    unit.invert_select();
+
+            let unit_clicked = is_position_within_sprite(selection_pos, &unit_pos, sprite);
+            if unit_clicked {
+                any_unit_clicked.replace((entity, command));
+            }
+
+            if command == MouseButton::Left {
+                if unit_clicked {
+                    if state.is_toggle_select_on {
+                        unit.invert_select();
+                    } else {
+                        unit.select();
+                    }   
                 } else {
-                    unit.select();
-                }   
-            } else {
-                // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
-                if !(state.is_multi_select_on || state.is_toggle_select_on) {
-                    unit.deselect();
+                    // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
+                    if !(state.is_multi_select_on || state.is_toggle_select_on) {
+                        unit.deselect();
+                    }
                 }
             }
         }
+    }
 
-        // send new commands to selected units
-        for cmd in new_commands.clone() {
-            if unit.is_selected() {
+    if let Some((target, command)) = any_unit_clicked {
+        match command {
+            MouseButton::Left => {
+                // selection is handled in the query loop because life is complicated
+            },
+            MouseButton::Right => {
+                log::debug!("assigning attack target");
+                new_commands.push(UnitCommands::AttackSlow(target));
+            },
+            _ => (),
+        }
+    }
+
+    // send new commands to selected units
+    // is it gross iterating over the query twice in one function?
+    for (_entity, mut unit, _transform, _sprite) in &mut query.iter() {
+        if unit.is_selected() {
+            for cmd in new_commands.clone() {
                 unit.process_command(cmd.clone());
             }
         }
-
     }
 }
+
+
 struct CursorState {
     cursor: EventReader<CursorMoved>,
     // need to identify the main camera
@@ -205,31 +242,31 @@ fn cursor_system(
     }
 }
 
-fn selection_system(
-    button_materials: Res<SelectionMaterials>,
-    mut interaction_query: Query<(
-        &Button,
-        Mutated<Interaction>,
-        &mut Handle<ColorMaterial>,
-        &mut Unit,
-        &Children,
-    )>,
-    text_query: Query<&mut Text>,
-) {
-    for (_button, interaction, mut material, mut unit, children) in &mut interaction_query.iter() {
-        let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
-        match *interaction {
-            Interaction::Clicked => {
-                unit.select();
-            }
-            Interaction::Hovered => {
-                text.value = "Select?".to_string();
-                *material = button_materials.hovered;
-            }
-            Interaction::None => (),
-        }
-    }
-}
+// fn selection_system(
+//     button_materials: Res<SelectionMaterials>,
+//     mut interaction_query: Query<(
+//         &Button,
+//         Mutated<Interaction>,
+//         &mut Handle<ColorMaterial>,
+//         &mut Unit,
+//         &Children,
+//     )>,
+//     text_query: Query<&mut Text>,
+// ) {
+//     for (_button, interaction, mut material, mut unit, children) in &mut interaction_query.iter() {
+//         let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
+//         match *interaction {
+//             Interaction::Clicked => {
+//                 unit.select();
+//             }
+//             Interaction::Hovered => {
+//                 text.value = "Select?".to_string();
+//                 *material = button_materials.hovered;
+//             }
+//             Interaction::None => (),
+//         }
+//     }
+// }
 
 fn setup(
     mut commands: Commands,
@@ -241,15 +278,6 @@ fn setup(
         // cameras
         .spawn(Camera2dComponents::default())
         .spawn(UiCameraComponents::default())
-        // paddle
-        // .spawn(SpriteComponents {
-        //     material: materials.add(Color::rgb(0.2, 0.2, 0.8).into()),
-        //     transform: Transform::from_translation(Vec3::new(0.0, -215.0, 0.0)),
-        //     sprite: Sprite::new(Vec2::new(120.0, 30.0)),
-        //     ..Default::default()
-        // })
-        // .with(Paddle { speed: 500.0 })
-        // .with(Collider::Solid)
 
         // units
         .spawn(SpriteComponents {
@@ -266,43 +294,6 @@ fn setup(
             ..Default::default()
         })
         .with(Unit::default())
-        // .with(ButtonComponents {
-        //         style: Style {
-        //             size: Size::new(Val::Px(150.0), Val::Px(65.0)),
-        //             // center button
-        //             margin: Rect::all(Val::Auto),
-        //             // horizontally center child text
-        //             justify_content: JustifyContent::Center,
-        //             // vertically center child text
-        //             align_items: AlignItems::Center,
-        //             ..Default::default()
-        //         },
-        //         material: materials.unselected,
-        //         ..Default::default()
-        //     }
-        // )
-
-        // scoreboard
-        // .spawn(TextComponents {
-        //     text: Text {
-        //         font: asset_server.load("assets/fonts/FiraSans-Bold.ttf").unwrap(),
-        //         value: "Score:".to_string(),
-        //         style: TextStyle {
-        //             color: Color::rgb(0.2, 0.2, 0.8),
-        //             font_size: 40.0,
-        //         },
-        //     },
-        //     style: Style {
-                // position_type: PositionType::Absolute,
-        //         position: Rect {
-        //             top: Val::Px(5.0),
-        //             left: Val::Px(5.0),
-        //             ..Default::default()
-        //         },
-        //         ..Default::default()
-        //     },
-        //     ..Default::default()
-        // })
         ;
 
 
@@ -364,9 +355,23 @@ fn unit_movement_system(
 ) {
     for (mut unit, mut transform) in &mut query.iter() {
         let translation = transform.translation_mut();
+        let unit_pos: XyPos = (translation.x(), translation.y()).into();
 
         // if the unit is going somewhere
-        if let Some(relative_position) = unit.pos_rel_to_waypoint(translation){
+        if let Some(relative_position) = match &unit.current_command {
+                UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
+                    let target_translation = query.get::<&Transform>(target.clone()).unwrap().translation();
+                    let target_pos: XyPos = (target_translation.x(), target_translation.y()).into();
+                    Some(target_pos - unit_pos)
+                },     
+                UnitCurrentCommand::MoveSlow(waypoint) | UnitCurrentCommand::MoveFast(waypoint) => {
+                    Some(waypoint.clone() - unit_pos)
+                },
+                UnitCurrentCommand::None_ => {
+                    None
+                },
+            }
+        {
             let unit_distance = unit.current_speed() * time.delta_seconds;
         
             // using length_squared() for totally premature optimization
@@ -385,7 +390,7 @@ fn unit_movement_system(
                 *translation.x_mut() = translation.x() + relative_position.x();
                 *translation.y_mut() = translation.y() + relative_position.y();
                 log::debug!("reached destination");
-                unit.state = UnitState::Idle;
+                unit.process_command(UnitCommands::Stop);
             }
         }
     }

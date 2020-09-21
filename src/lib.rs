@@ -7,21 +7,21 @@ use bevy::{
 
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 
-#[derive(Clone)]
-pub enum Waypoint {
-    Position(XyPos),
-    Unit,
-}
-
-
 pub type XyPos = Vec2;
 
+pub struct Unit {
+    pub current_command: UnitCurrentCommand,
+    max_speed: f32,
+    is_selected: bool,
+}
+
+/// Intended for UI display
 pub enum UnitState {
     Idle,
     Firing,
     Melee,
-    MovingFast(Waypoint),
-    MovingSlow(Waypoint),
+    MovingFast,
+    MovingSlow,
 }
 
 impl UnitState {
@@ -30,44 +30,66 @@ impl UnitState {
             UnitState::Idle => "I",
             UnitState::Firing => "F",
             UnitState::Melee => "M",
-            UnitState::MovingFast(_) => "R",
-            UnitState::MovingSlow(_) => "W",
+            UnitState::MovingFast => "R",
+            UnitState::MovingSlow => "W",
         }
     }
 }
 
 #[derive(Clone)]
+pub enum UnitCurrentCommand {
+    AttackFast(Entity),
+    AttackSlow(Entity),
+    MoveFast(XyPos),
+    MoveSlow(XyPos),
+    None_,
+}
+
+#[derive(Clone)]
 pub enum UnitCommands {
-    AttackFast,
-    AttackSlow,
+    AttackFast(Entity),
+    AttackSlow(Entity),
     MoveFast(XyPos),
     MoveSlow(XyPos),
     ToggleSpeed,
     Stop,
 }
 
-
-pub struct Unit {
-    pub state: UnitState,
-    max_speed: f32,
-    is_selected: bool,
-}
-
 impl Unit {
     pub fn process_command(&mut self, cmd: UnitCommands) {
         use UnitCommands::*;
         match cmd {
-            AttackFast | AttackSlow => unimplemented!(),
-            Stop => self.state = UnitState::Idle,
-            MoveFast(pos) => self.state = UnitState::MovingSlow(Waypoint::Position(pos)),
-            MoveSlow(pos) => self.state = UnitState::MovingFast(Waypoint::Position(pos)),
+            AttackFast(target) => {
+                self.current_command = UnitCurrentCommand::AttackFast(target);
+            },
+            AttackSlow(target) => {
+                self.current_command = UnitCurrentCommand::AttackSlow(target);
+            },
+            MoveFast(pos) => {
+                self.current_command = UnitCurrentCommand::MoveFast(pos);
+            },
+            MoveSlow(pos) => {
+                self.current_command = UnitCurrentCommand::MoveSlow(pos)
+            },
+            Stop => {
+                self.current_command = UnitCurrentCommand::None_;
+            },
             ToggleSpeed => {
-                match &self.state {
-                    UnitState::MovingFast(wp) => self.state = UnitState::MovingSlow(wp.clone()),
-                    UnitState::MovingSlow(wp) => self.state = UnitState::MovingFast(wp.clone()),
+                match &self.current_command {
+                    UnitCurrentCommand::MoveFast(wp) => self.current_command = UnitCurrentCommand::MoveSlow(wp.clone()),
+                    UnitCurrentCommand::MoveSlow(wp) => self.current_command = UnitCurrentCommand::MoveFast(wp.clone()),
                     _ => (),
                 }
             }
+        }
+    }
+
+    pub fn state(&self) -> UnitState {
+        use UnitCurrentCommand::*;
+        match self.current_command {
+            AttackFast(_) | MoveFast(_) => UnitState::MovingFast,
+            AttackSlow(_) | MoveSlow(_) => UnitState::MovingSlow,
+            None_ => UnitState::Idle,
         }
     }
 
@@ -95,38 +117,18 @@ impl Unit {
     }
 
     pub fn current_speed(&self) -> f32 {
-        match self.state {
-            UnitState::MovingSlow(_) => self.max_speed * WALKING_SPEED_FACTOR,
-            UnitState::MovingFast(_) => self.max_speed,
+        match self.current_command {
+            UnitCurrentCommand::MoveSlow(_) => self.max_speed * WALKING_SPEED_FACTOR,
+            UnitCurrentCommand::MoveFast(_) => self.max_speed,
             _ => 0.0,
         }
     }
-
-    /// returns the relative translation of a given position from the units waypoint
-    pub fn pos_rel_to_waypoint(&self, current_pos: &Vec4) -> Option<Vec2> {
-        match &self.state {
-            UnitState::MovingSlow(waypoint) | UnitState::MovingFast(waypoint) => {
-                if let Waypoint::Position(wpos) = waypoint {
-                    // get direction and normalize
-                    let pos: XyPos = (current_pos.x(), current_pos.y()).into();
-                    Some(wpos.clone() - pos)
-                } else {
-                    unimplemented!();
-                }
-            },
-            UnitState::Idle => {
-                None
-            }
-            _ => unimplemented!()
-        }
-    }
-
 }
 
 impl Default for Unit {
     fn default() -> Self {
         Unit {
-            state: UnitState::Idle,
+            current_command: UnitCurrentCommand::None_,
             max_speed: 50.0,
             is_selected: false,
         }

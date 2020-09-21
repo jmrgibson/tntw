@@ -18,9 +18,10 @@ an AI opponent.
 
 ## Coming soon(tm)
 
+- drag-select
 - different icon for selected/unselected units
 - UI for unit state
-- unit waypoints to other units
+- unit waypoints to other units (HARD - how to I keep references to other query objects)
 
 ## Why?
 
