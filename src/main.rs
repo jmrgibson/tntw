@@ -230,10 +230,17 @@ fn setup(
         // .with(Paddle { speed: 500.0 })
         // .with(Collider::Solid)
 
-        // unit
+        // units
         .spawn(SpriteComponents {
             material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
             transform: Transform::from_translation(Vec3::new(0.0, -50.0, 1.0)),
+            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+            ..Default::default()
+        })
+        .with(Unit::default())
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
+            transform: Transform::from_translation(Vec3::new(0.0, 50.0, 1.0)),
             sprite: Sprite::new(Vec2::new(30.0, 30.0)),
             ..Default::default()
         })
@@ -325,35 +332,6 @@ fn setup(
             ..Default::default()
         })
         .with(Collider::Solid);
-
-    // // Add bricks
-    // let brick_rows = 4;
-    // let brick_columns = 5;
-    // let brick_spacing = 20.0;
-    // let brick_size = Vec2::new(150.0, 30.0);
-    // let bricks_width = brick_columns as f32 * (brick_size.x() + brick_spacing) - brick_spacing;
-    // // center the bricks and move them up a bit
-    // let bricks_offset = Vec3::new(-(bricks_width - brick_size.x()) / 2.0, 100.0, 0.0);
-
-    // for row in 0..brick_rows {
-    //     let y_position = row as f32 * (brick_size.y() + brick_spacing);
-    //     for column in 0..brick_columns {
-    //         let brick_position = Vec3::new(
-    //             column as f32 * (brick_size.x() + brick_spacing),
-    //             y_position,
-    //             0.0,
-    //         ) + bricks_offset;
-    //         commands
-    //             // brick
-    //             .spawn(SpriteComponents {
-    //                 material: materials.add(Color::rgb(0.2, 0.2, 0.8).into()),
-    //                 sprite: Sprite::new(brick_size),
-    //                 transform: Transform::from_translation(brick_position),
-    //                 ..Default::default()
-    //             })
-    //             .with(Collider::Scorable);
-    //     }
-    // }
 }
 
  
