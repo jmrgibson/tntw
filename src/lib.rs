@@ -15,6 +15,12 @@ pub struct Unit {
     is_selected: bool,
 }
 
+pub enum Waypoint {
+    None,
+    Position(XyPos),
+    Unit(Entity),
+}
+
 /// Intended for UI display
 pub enum UnitState {
     Idle,
@@ -132,5 +138,11 @@ impl Default for Unit {
             max_speed: 50.0,
             is_selected: false,
         }
+    }
+}
+
+impl Default for Waypoint {
+    fn default() -> Self {
+        Waypoint::None
     }
 }

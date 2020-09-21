@@ -7,7 +7,7 @@ use bevy::{
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
-use tntw::{UnitCurrentCommand, UnitState, UnitCommands, Unit, XyPos};
+use tntw::{UnitCurrentCommand, UnitState, UnitCommands, Unit, XyPos, Waypoint};
 
 
 
@@ -28,6 +28,86 @@ fn main() {
         // .add_system(scoreboard_system.system())
         .run();
 }
+
+fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: Res<AssetServer>,
+) {
+    // Add the game's entities to our world
+    commands
+        // cameras
+        .spawn(Camera2dComponents::default())
+        .spawn(UiCameraComponents::default())
+
+        // units
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
+            transform: Transform::from_translation(Vec3::new(0.0, -50.0, 1.0)),
+            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+            ..Default::default()
+        })
+        .with(Unit::default())
+        .spawn(SpriteComponents {
+            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
+            transform: Transform::from_translation(Vec3::new(0.0, 50.0, 1.0)),
+            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+            ..Default::default()
+        })
+        .with(Unit::default())
+        // .with(Waypoint::default())
+        ;
+
+
+    // set up cursor tracker
+    let camera = Camera2dComponents::default();
+    let e = commands.spawn(camera).current_entity().unwrap();
+    commands.insert_resource(CursorState {
+        cursor: Default::default(),
+        camera_e: e,
+        last_pos: XyPos::default(),
+    });
+
+    // Add walls
+    let wall_material = materials.add(Color::rgb(0.5, 0.5, 0.5).into());
+    let wall_thickness = 10.0;
+    let bounds = Vec2::new(900.0, 600.0);
+
+    commands
+        // left
+        .spawn(SpriteComponents {
+            material: wall_material,
+            transform: Transform::from_translation(Vec3::new(-bounds.x() / 2.0, 0.0, 0.0)),
+            sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y() + wall_thickness)),
+            ..Default::default()
+        })
+        .with(Collider::Solid)
+        // right
+        .spawn(SpriteComponents {
+            material: wall_material,
+            transform: Transform::from_translation(Vec3::new(bounds.x() / 2.0, 0.0, 0.0)),
+            sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y() + wall_thickness)),
+            ..Default::default()
+        })
+        .with(Collider::Solid)
+        // bottom
+        .spawn(SpriteComponents {
+            material: wall_material,
+            transform: Transform::from_translation(Vec3::new(0.0, -bounds.y() / 2.0, 0.0)),
+            sprite: Sprite::new(Vec2::new(bounds.x() + wall_thickness, wall_thickness)),
+            ..Default::default()
+        })
+        .with(Collider::Solid)
+        // top
+        .spawn(SpriteComponents {
+            material: wall_material,
+            transform: Transform::from_translation(Vec3::new(0.0, bounds.y() / 2.0, 0.0)),
+            sprite: Sprite::new(Vec2::new(bounds.x() + wall_thickness, wall_thickness)),
+            ..Default::default()
+        })
+        .with(Collider::Solid);
+}
+
 
 struct SelectionMaterials {
     normal: Handle<ColorMaterial>,
@@ -90,10 +170,10 @@ fn input_system(
     mut state: ResMut<InputState>,
     cursor: Res<CursorState>,
     ev_keys: Res<Events<KeyboardInput>>,
-    ev_cursor: Res<Events<CursorMoved>>,
-    ev_motion: Res<Events<MouseMotion>>,
+    // ev_cursor: Res<Events<CursorMoved>>,
+    // ev_motion: Res<Events<MouseMotion>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
-    ev_scroll: Res<Events<MouseWheel>>,
+    // ev_scroll: Res<Events<MouseWheel>>,
     mut query: Query<(Entity, &mut Unit, &Transform, &Sprite)>,
 ) {
     let mut new_commands: Vec<UnitCommands> = Vec::new();
@@ -125,73 +205,78 @@ fn input_system(
         }
     }
 
-    let mut mouse_command_and_pos: Option<(MouseButton, XyPos)> = None;
+    let mut mouse_command: Option<MouseButton> = None;
+    let mut mouse_pos: Option<XyPos> = None;
 
-    // Mouse buttons
+    // get position and left/right of mouse button
     for ev in state.mousebtn.iter(&ev_mousebtn) {
         if ev.state.is_pressed() {
             // process on click
-            // eprintln!("Just pressed mouse button: {:?}", ev.button);
         } else {
-            // eprintln!("Just released mouse button: {:?}", ev.button);
             // process on release
 
             // get last cursor position 
             let position = cursor.last_pos.clone();
+            mouse_pos.replace(position);
 
             if ev.button == MouseButton::Right {
-                log::trace!("Right click");
-                mouse_command_and_pos.replace((MouseButton::Right, position));
+                mouse_command.replace(MouseButton::Right);
             } else if ev.button == MouseButton::Left  {
-                log::trace!("Left click");
-                mouse_command_and_pos.replace((MouseButton::Left, position));
+                mouse_command.replace(MouseButton::Left);
+            } else {
+                // don't care about other buttons
+                // TODO use an actual command enum
             }
         }
     }
-
-    // 
-    let mut any_unit_clicked: Option<(Entity, MouseButton)> = None;
+     
+    let mut any_unit_clicked: Option<Entity> = None;
     
-    // new_commands.push(UnitCommands::MoveSlow(position));
     // determine if the mouse action was on a unit or not
-    if let Some((command, selection_pos)) = mouse_command_and_pos {
+    if let Some(selection_pos) = mouse_pos {
         for (entity, mut unit, transform, sprite) in &mut query.iter() {
             let unit_pos = transform.translation();
 
             let unit_clicked = is_position_within_sprite(selection_pos, &unit_pos, sprite);
             if unit_clicked {
-                any_unit_clicked.replace((entity, command));
+                any_unit_clicked.replace(entity);
             }
 
-            if command == MouseButton::Left {
-                if unit_clicked {
-                    if state.is_toggle_select_on {
-                        unit.invert_select();
+            // handle select/deselect
+            if let Some(command) = mouse_command {
+                if command == MouseButton::Left {
+                    if unit_clicked {
+                        if state.is_toggle_select_on {
+                            unit.invert_select();
+                        } else {
+                            unit.select();
+                        }   
                     } else {
-                        unit.select();
-                    }   
-                } else {
-                    // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
-                    if !(state.is_multi_select_on || state.is_toggle_select_on) {
-                        unit.deselect();
+                        // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
+                        if !(state.is_multi_select_on || state.is_toggle_select_on) {
+                            unit.deselect();
+                        }
                     }
                 }
             }
         }
     }
 
-    if let Some((target, command)) = any_unit_clicked {
-        match command {
-            MouseButton::Left => {
-                // selection is handled in the query loop because life is complicated
-            },
-            MouseButton::Right => {
+   match (mouse_command, mouse_pos) {
+       (Some(MouseButton::Left), _) => {
+           // selection is handled in the query loop because life is complicated
+       },
+       (Some(MouseButton::Right), Some(mouse_pos)) => {
+           if let Some(target) = any_unit_clicked {
                 log::debug!("assigning attack target");
                 new_commands.push(UnitCommands::AttackSlow(target));
-            },
-            _ => (),
-        }
-    }
+            } else {
+                log::debug!("assigning move waypoint");
+                new_commands.push(UnitCommands::MoveSlow(mouse_pos));
+           }
+       },
+       _ => (),
+   }
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
@@ -242,125 +327,21 @@ fn cursor_system(
     }
 }
 
-// fn selection_system(
-//     button_materials: Res<SelectionMaterials>,
-//     mut interaction_query: Query<(
-//         &Button,
-//         Mutated<Interaction>,
-//         &mut Handle<ColorMaterial>,
-//         &mut Unit,
-//         &Children,
-//     )>,
-//     text_query: Query<&mut Text>,
-// ) {
-//     for (_button, interaction, mut material, mut unit, children) in &mut interaction_query.iter() {
-//         let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
-//         match *interaction {
-//             Interaction::Clicked => {
-//                 unit.select();
-//             }
-//             Interaction::Hovered => {
-//                 text.value = "Select?".to_string();
-//                 *material = button_materials.hovered;
-//             }
-//             Interaction::None => (),
-//         }
-//     }
-// }
-
-fn setup(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: Res<AssetServer>,
-) {
-    // Add the game's entities to our world
-    commands
-        // cameras
-        .spawn(Camera2dComponents::default())
-        .spawn(UiCameraComponents::default())
-
-        // units
-        .spawn(SpriteComponents {
-            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
-            transform: Transform::from_translation(Vec3::new(0.0, -50.0, 1.0)),
-            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
-            ..Default::default()
-        })
-        .with(Unit::default())
-        .spawn(SpriteComponents {
-            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
-            transform: Transform::from_translation(Vec3::new(0.0, 50.0, 1.0)),
-            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
-            ..Default::default()
-        })
-        .with(Unit::default())
-        ;
-
-
-    // set up cursor tracker
-    let camera = Camera2dComponents::default();
-    let e = commands.spawn(camera).current_entity().unwrap();
-    commands.insert_resource(CursorState {
-        cursor: Default::default(),
-        camera_e: e,
-        last_pos: XyPos::default(),
-    });
-
-    // Add walls
-    let wall_material = materials.add(Color::rgb(0.5, 0.5, 0.5).into());
-    let wall_thickness = 10.0;
-    let bounds = Vec2::new(900.0, 600.0);
-
-    commands
-        // left
-        .spawn(SpriteComponents {
-            material: wall_material,
-            transform: Transform::from_translation(Vec3::new(-bounds.x() / 2.0, 0.0, 0.0)),
-            sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y() + wall_thickness)),
-            ..Default::default()
-        })
-        .with(Collider::Solid)
-        // right
-        .spawn(SpriteComponents {
-            material: wall_material,
-            transform: Transform::from_translation(Vec3::new(bounds.x() / 2.0, 0.0, 0.0)),
-            sprite: Sprite::new(Vec2::new(wall_thickness, bounds.y() + wall_thickness)),
-            ..Default::default()
-        })
-        .with(Collider::Solid)
-        // bottom
-        .spawn(SpriteComponents {
-            material: wall_material,
-            transform: Transform::from_translation(Vec3::new(0.0, -bounds.y() / 2.0, 0.0)),
-            sprite: Sprite::new(Vec2::new(bounds.x() + wall_thickness, wall_thickness)),
-            ..Default::default()
-        })
-        .with(Collider::Solid)
-        // top
-        .spawn(SpriteComponents {
-            material: wall_material,
-            transform: Transform::from_translation(Vec3::new(0.0, bounds.y() / 2.0, 0.0)),
-            sprite: Sprite::new(Vec2::new(bounds.x() + wall_thickness, wall_thickness)),
-            ..Default::default()
-        })
-        .with(Collider::Solid);
-}
-
- 
-
-
 fn unit_movement_system(
     time: Res<Time>,
-    mut query: Query<(&mut Unit, &mut Transform)>,
+    mut unit_query: Query<(&mut Unit, &mut Transform)>,
+    target_query: Query<&Transform>,
 ) {
-    for (mut unit, mut transform) in &mut query.iter() {
+    // log::debug!("here?");
+    for (mut unit, mut transform) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
 
         // if the unit is going somewhere
         if let Some(relative_position) = match &unit.current_command {
                 UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
-                    let target_translation = query.get::<&Transform>(target.clone()).unwrap().translation();
+                    // panics at runtime becaue transform is already borrowed uniquely 
+                    let target_translation = target_query.get::<Transform>(target.clone()).unwrap().translation();
                     let target_pos: XyPos = (target_translation.x(), target_translation.y()).into();
                     Some(target_pos - unit_pos)
                 },     
@@ -395,71 +376,3 @@ fn unit_movement_system(
         }
     }
 }
-
-// fn ball_movement_system(time: Res<Time>, mut ball_query: Query<(&Ball, &mut Transform)>) {
-//     // clamp the timestep to stop the ball from escaping when the game starts
-//     let delta_seconds = f32::min(0.2, time.delta_seconds);
-
-//     for (ball, mut transform) in &mut ball_query.iter() {
-//         transform.translate(ball.velocity * delta_seconds);
-//     }
-// }
-
-// fn scoreboard_system(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
-//     for mut text in &mut query.iter() {
-//         text.value = format!("Score: {}", scoreboard.score);
-//     }
-// }
-
-// fn ball_collision_system(
-//     mut commands: Commands,
-//     mut scoreboard: ResMut<Scoreboard>,
-//     mut ball_query: Query<(&mut Ball, &Transform, &Sprite)>,
-//     mut collider_query: Query<(Entity, &Collider, &Transform, &Sprite)>,
-// ) {
-//     for (mut ball, ball_transform, sprite) in &mut ball_query.iter() {
-//         let ball_size = sprite.size;
-//         let velocity = &mut ball.velocity;
-
-//         // check collision with walls
-//         for (collider_entity, collider, transform, sprite) in &mut collider_query.iter() {
-//             let collision = collide(
-//                 ball_transform.translation(),
-//                 ball_size,
-//                 transform.translation(),
-//                 sprite.size,
-//             );
-//             if let Some(collision) = collision {
-//                 // scorable colliders should be despawned and increment the scoreboard on collision
-//                 if let Collider::Scorable = *collider {
-//                     scoreboard.score += 1;
-//                     commands.despawn(collider_entity);
-//                 }
-
-//                 // reflect the ball when it collides
-//                 let mut reflect_x = false;
-//                 let mut reflect_y = false;
-
-//                 // only reflect if the ball's velocity is going in the opposite direction of the collision
-//                 match collision {
-//                     Collision::Left => reflect_x = velocity.x() > 0.0,
-//                     Collision::Right => reflect_x = velocity.x() < 0.0,
-//                     Collision::Top => reflect_y = velocity.y() < 0.0,
-//                     Collision::Bottom => reflect_y = velocity.y() > 0.0,
-//                 }
-
-//                 // reflect velocity on the x-axis if we hit something on the x-axis
-//                 if reflect_x {
-//                     *velocity.x_mut() = -velocity.x();
-//                 }
-
-//                 // reflect velocity on the y-axis if we hit something on the y-axis
-//                 if reflect_y {
-//                     *velocity.y_mut() = -velocity.y();
-//                 }
-
-//                 break;
-//             }
-//         }
-//     }
-// }
