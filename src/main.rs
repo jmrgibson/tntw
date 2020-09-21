@@ -6,9 +6,12 @@ use bevy::{
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
+use tntw::{Waypoint, UnitState, UnitCommands, Unit, XyPos};
+
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 
 fn main() {
+    env_logger::init();
     App::build()
         .add_default_plugins()
         // .add_resource(Scoreboard { score: 0 })
@@ -42,83 +45,6 @@ impl FromResources for SelectionMaterials {
     }
 }
 
-type XyPos = Vec2;
-
-enum UnitState {
-    Idle,
-    Firing,
-    Melee,
-    MovingFast(Waypoint),
-    MovingSlow(Waypoint),
-}
-
-#[derive(Clone)]
-enum UnitCommands {
-    AttackFast,
-    AttackSlow,
-    MoveFast(XyPos),
-    MoveSlow(XyPos),
-    ToggleSpeed,
-    Stop,
-}
-
-#[derive(Clone)]
-pub enum Waypoint {
-    Position(XyPos),
-    Unit,
-}
-
-struct Unit {
-    state: UnitState,
-    max_speed: f32,
-    is_selected: bool,
-}
-
-impl Unit {
-    fn assign_waypoint() {
-
-    }
-
-    fn process_command(&mut self, cmd: UnitCommands) {
-        use UnitCommands::*;
-        match cmd {
-            AttackFast | AttackSlow => {},
-            Stop => self.state = UnitState::Idle,
-            MoveFast(pos) | MoveSlow(pos) => self.state = UnitState::MovingSlow(Waypoint::Position(pos)),
-            ToggleSpeed => {
-                match &self.state {
-                    UnitState::MovingFast(wp) => self.state = UnitState::MovingSlow(wp.clone()),
-                    UnitState::MovingSlow(wp) => self.state = UnitState::MovingFast(wp.clone()),
-                    _ => (),
-                }
-            }
-        }
-    }
-    fn select(&mut self) {
-        self.is_selected = true;
-    }
-
-    fn deselect(&mut self) {
-        self.is_selected = false;
-    }
-
-    pub fn is_selected(&self) -> bool {
-        self.is_selected
-    }
-}
-
-impl Default for Unit {
-    fn default() -> Self {
-        Unit {
-            state: UnitState::MovingSlow(Waypoint::Position((50.0, 50.0).into())),
-            max_speed: 5.0,
-            // TODO implement selection
-            is_selected: true,
-        }
-    }
-}
-
-
 enum Collider {
     Solid,
 }
@@ -151,14 +77,14 @@ fn input_system(
     ev_motion: Res<Events<MouseMotion>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     ev_scroll: Res<Events<MouseWheel>>,
-    mut query: Query<&mut Unit>,
+    mut query: Query<(&mut Unit, &Transform, &Sprite)>,
 ) {
     let mut new_commands: Vec<UnitCommands> = Vec::new();
 
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
         if ev.state.is_pressed() {
-            // eprintln!("Just pressed key: {:?}", ev.key_code);
+            eprintln!("Just pressed key: {:?}", ev.key_code);
             if let Some(key) = ev.key_code {
                 match key {
                     KeyCode::S => new_commands.push(UnitCommands::Stop), 
@@ -168,44 +94,58 @@ fn input_system(
 
             }
         } else {
+            // on release
             
         }
     }
 
+    let mut maybe_selection_pos: Option<XyPos> = None;
+
     // Mouse buttons
     for ev in state.mousebtn.iter(&ev_mousebtn) {
         if ev.state.is_pressed() {
-            // process select
+            // process on click
             // eprintln!("Just pressed mouse button: {:?}", ev.button);
         } else {
             // eprintln!("Just released mouse button: {:?}", ev.button);
             // process on release
-            // TODO handle left/right click
 
             // get last cursor position 
             let position = cursor.last_pos.clone();
 
             if ev.button == MouseButton::Right {
+                log::trace!("Right click");
                 new_commands.push(UnitCommands::MoveSlow(position));
             } else if ev.button == MouseButton::Left  {
-
+                log::trace!("Left click");
+                maybe_selection_pos.replace(position);
             }
         }
     }
 
-    // scrolling (mouse wheel, touchpad, etc.)
-    for ev in state.scroll.iter(&ev_scroll) {
-        eprintln!("Scrolled vertically by {} and horizontally by {}.", ev.y, ev.x);
-    }
+    for (mut unit, transform, sprite) in &mut query.iter() {
+        if let Some(selection_pos) = maybe_selection_pos {
+            let unit_pos = transform.translation();
+            // check selection position is within unit center + sprite size bounds
+            // TODO handle rotation, does this also handle dynamic sizing?
+            // TODO there is most certainly a better way of doing this math
+            if selection_pos.x() < (unit_pos.x() + sprite.size.x()) && selection_pos.x() > (unit_pos.x() - sprite.size.x()) && 
+                selection_pos.y() < (unit_pos.y() + sprite.size.y()) && selection_pos.y() > (unit_pos.y() - sprite.size.y()) {
+                unit.select();
+            } else {
+                unit.deselect();
+            }
+        }
 
-    for cmd in new_commands {
-        for mut unit in &mut query.iter() {
+
+        // send new commands to units
+        for cmd in new_commands.clone() {
             if unit.is_selected() {
                 unit.process_command(cmd.clone());
             }
         }
-    }
 
+    }
 }
 struct CursorState {
     cursor: EventReader<CursorMoved>,
@@ -216,7 +156,7 @@ struct CursorState {
 
 
 /// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation stores it
-/// so that it can be accesed by the input system
+/// in a resource so that it can be accesed by the input system
 fn cursor_system(
     mut state: ResMut<CursorState>,
     ev_cursor: Res<Events<CursorMoved>>,
@@ -270,14 +210,6 @@ fn selection_system(
     }
 }
 
-// fn command_system(
-//     mut interaction_query: Query<(
-//         &mut Unit
-//     )>
-// ) {
-
-// }
-
 fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -317,7 +249,7 @@ fn setup(
         //             align_items: AlignItems::Center,
         //             ..Default::default()
         //         },
-        //         material: materials.unse;ec,
+        //         material: materials.unselected,
         //         ..Default::default()
         //     }
         // )
@@ -333,7 +265,7 @@ fn setup(
         //         },
         //     },
         //     style: Style {
-        //         position_type: PositionType::Absolute,
+                // position_type: PositionType::Absolute,
         //         position: Rect {
         //             top: Val::Px(5.0),
         //             left: Val::Px(5.0),
@@ -430,7 +362,6 @@ fn unit_movement_system(
     mut query: Query<(&mut Unit, &mut Transform)>,
 ) {
     for (mut unit, mut transform) in &mut query.iter() {
-        // move unit (with its own translation) 
         let translation = transform.translation_mut();
 
         let (direction, speed_factor) = match &mut unit.state {
@@ -440,7 +371,7 @@ fn unit_movement_system(
                     let pos: XyPos = (translation.x(), translation.y()).into();
                     let direction =  (wpos.clone() - pos).normalize();
                     
-                    let speed_factor = unit.max_speed * WALKING_SPEED_FACTOR;
+                    let speed_factor = unit.max_speed() * WALKING_SPEED_FACTOR;
 
                     (direction, speed_factor)
                 } else {
@@ -453,7 +384,7 @@ fn unit_movement_system(
                     let pos: XyPos = (translation.x(), translation.y()).into();
                     let direction =  (wpos.clone() - pos).normalize();
                     
-                    let speed_factor = unit.max_speed;
+                    let speed_factor = unit.max_speed();
 
                     (direction, speed_factor)
                 } else {
