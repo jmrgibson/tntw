@@ -18,7 +18,6 @@ pub struct Unit {
 pub enum Waypoint {
     None,
     Position(XyPos),
-    Unit(Entity),
 }
 
 /// Intended for UI display
@@ -42,7 +41,7 @@ impl UnitState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum UnitCurrentCommand {
     AttackFast(Entity),
     AttackSlow(Entity),
@@ -51,7 +50,10 @@ pub enum UnitCurrentCommand {
     None_,
 }
 
-#[derive(Clone)]
+impl UnitCurrentCommand {
+}
+
+#[derive(Clone, Debug)]
 pub enum UnitCommands {
     AttackFast(Entity),
     AttackSlow(Entity),
@@ -59,6 +61,16 @@ pub enum UnitCommands {
     MoveSlow(XyPos),
     ToggleSpeed,
     Stop,
+}
+
+impl UnitCommands {
+    pub fn has_waypoint(&self) -> bool {
+        use UnitCommands::*;
+        match self {
+            AttackFast(_) | AttackSlow(_) | MoveFast(_) | MoveSlow(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Unit {
@@ -84,10 +96,13 @@ impl Unit {
                 match &self.current_command {
                     UnitCurrentCommand::MoveFast(wp) => self.current_command = UnitCurrentCommand::MoveSlow(wp.clone()),
                     UnitCurrentCommand::MoveSlow(wp) => self.current_command = UnitCurrentCommand::MoveFast(wp.clone()),
+                    UnitCurrentCommand::AttackFast(wp) => self.current_command = UnitCurrentCommand::AttackSlow(wp.clone()),
+                    UnitCurrentCommand::AttackSlow(wp) => self.current_command = UnitCurrentCommand::AttackFast(wp.clone()),
                     _ => (),
                 }
             }
         }
+        log::debug!("unit current command: {:?}", self.current_command);
     }
 
     pub fn state(&self) -> UnitState {
@@ -123,10 +138,18 @@ impl Unit {
     }
 
     pub fn current_speed(&self) -> f32 {
+        if self.is_walking() {
+            self.max_speed * WALKING_SPEED_FACTOR
+        } else {
+            self.max_speed
+        }
+    }
+    
+    pub fn is_walking(&self) -> bool {
+        use UnitCurrentCommand::*;
         match self.current_command {
-            UnitCurrentCommand::MoveSlow(_) => self.max_speed * WALKING_SPEED_FACTOR,
-            UnitCurrentCommand::MoveFast(_) => self.max_speed,
-            _ => 0.0,
+            AttackSlow(_) | MoveSlow(_) => true,
+            _ => false,
         }
     }
 }

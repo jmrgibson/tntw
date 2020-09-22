@@ -15,17 +15,14 @@ fn main() {
     env_logger::init();
     App::build()
         .add_default_plugins()
-        // .add_resource(Scoreboard { score: 0 })
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .init_resource::<InputState>()
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_startup_system(setup.system())
-        .add_system(unit_movement_system.system())
         .add_system(cursor_system.system())
         .add_system(input_system.system())
-        // .add_system(ball_collision_system.system())
-        // .add_system(ball_movement_system.system())
-        // .add_system(scoreboard_system.system())
+        .add_system(unit_waypoint_system.system())
+        .add_system(unit_movement_system.system())
         .run();
 }
 
@@ -38,26 +35,23 @@ fn setup(
     commands
         // cameras
         .spawn(Camera2dComponents::default())
-        .spawn(UiCameraComponents::default())
+        .spawn(UiCameraComponents::default());
 
-        // units
-        .spawn(SpriteComponents {
+    let unit_start_positions= vec![
+        (50.0, 0.0),
+        (-50.0, 0.0),
+    ];
+
+    for (x, y) in unit_start_positions.into_iter() {
+        commands.spawn(SpriteComponents {
             material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
-            transform: Transform::from_translation(Vec3::new(0.0, -50.0, 1.0)),
+            transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
             sprite: Sprite::new(Vec2::new(30.0, 30.0)),
             ..Default::default()
         })
         .with(Unit::default())
-        .spawn(SpriteComponents {
-            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
-            transform: Transform::from_translation(Vec3::new(0.0, 50.0, 1.0)),
-            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
-            ..Default::default()
-        })
-        .with(Unit::default())
-        // .with(Waypoint::default())
-        ;
-
+        .with(Waypoint::default());
+    }
 
     // set up cursor tracker
     let camera = Camera2dComponents::default();
@@ -174,7 +168,7 @@ fn input_system(
     // ev_motion: Res<Events<MouseMotion>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     // ev_scroll: Res<Events<MouseWheel>>,
-    mut query: Query<(Entity, &mut Unit, &Transform, &Sprite)>,
+    mut query: Query<(Entity, &mut Unit, &Transform, &Sprite, &mut Waypoint)>,
 ) {
     let mut new_commands: Vec<UnitCommands> = Vec::new();
 
@@ -234,7 +228,7 @@ fn input_system(
     
     // determine if the mouse action was on a unit or not
     if let Some(selection_pos) = mouse_pos {
-        for (entity, mut unit, transform, sprite) in &mut query.iter() {
+        for (entity, mut unit, transform, sprite, _waypoint) in &mut query.iter() {
             let unit_pos = transform.translation();
 
             let unit_clicked = is_position_within_sprite(selection_pos, &unit_pos, sprite);
@@ -268,10 +262,8 @@ fn input_system(
        },
        (Some(MouseButton::Right), Some(mouse_pos)) => {
            if let Some(target) = any_unit_clicked {
-                log::debug!("assigning attack target");
                 new_commands.push(UnitCommands::AttackSlow(target));
             } else {
-                log::debug!("assigning move waypoint");
                 new_commands.push(UnitCommands::MoveSlow(mouse_pos));
            }
        },
@@ -280,9 +272,15 @@ fn input_system(
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
-    for (_entity, mut unit, _transform, _sprite) in &mut query.iter() {
+    for (_entity, mut unit, _transform, _sprite, mut waypoint) in &mut query.iter() {
         if unit.is_selected() {
             for cmd in new_commands.clone() {
+                if let Some(xy) = mouse_pos {
+                    if cmd.has_waypoint() { 
+                        *waypoint = Waypoint::Position(xy);
+                    }
+                }
+                log::info!("Assigning {:?} command", cmd);
                 unit.process_command(cmd.clone());
             }
         }
@@ -327,38 +325,61 @@ fn cursor_system(
     }
 }
 
+// for each unit, calculates the position of its next waypoint
+fn unit_waypoint_system(
+    mut unit_query: Query<(&Unit, &mut Waypoint)>,
+    target_query: Query<&Transform>, 
+) {
+    for (unit, mut waypoint) in &mut unit_query.iter() {
+        match &unit.current_command {
+            UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
+                let target_translation = target_query.get::<Transform>(target.clone()).unwrap().translation();
+                *waypoint = Waypoint::Position((target_translation.x(), target_translation.y()).into());
+            },
+            UnitCurrentCommand::MoveSlow(wp) | UnitCurrentCommand::MoveFast(wp) => {
+                // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
+                *waypoint = Waypoint::Position(wp.clone());
+            },
+            UnitCurrentCommand::None_ => {
+            },
+        }
+    }
+}
 
 // TODO have a separate component for waypoint position for all command types
 // that is updated in a separate system, so its calculated separately from the unit movement system
 // so we don't run into unique borrow issues
 fn unit_movement_system(
     time: Res<Time>,
-    mut unit_query: Query<(&mut Unit, &mut Transform)>,
-    target_query: Query<&Transform>,
+    mut unit_query: Query<(&mut Unit, &mut Transform, &Waypoint)>,
 ) {
-    // log::debug!("here?");
-    for (mut unit, mut transform) in &mut unit_query.iter() {
+    for (mut unit, mut transform, waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
-
+        
         // if the unit is going somewhere
         if let Some(relative_position) = match &unit.current_command {
-                UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
-                    // panics at runtime becaue transform is already borrowed uniquely 
-                    let target_translation = target_query.get::<Transform>(target.clone()).unwrap().translation();
-                    let target_pos: XyPos = (target_translation.x(), target_translation.y()).into();
-                    Some(target_pos - unit_pos)
-                },     
-                UnitCurrentCommand::MoveSlow(waypoint) | UnitCurrentCommand::MoveFast(waypoint) => {
-                    Some(waypoint.clone() - unit_pos)
-                },
-                UnitCurrentCommand::None_ => {
+            UnitCurrentCommand::AttackSlow(_) | UnitCurrentCommand::AttackFast(_) => {
+                if let Waypoint::Position(xy) = waypoint {
+                    Some(xy.clone() - unit_pos)
+                } else {
+                    log::warn!("attack command without a waypoint!");
                     None
-                },
-            }
+                }
+            },     
+            UnitCurrentCommand::MoveSlow(_) | UnitCurrentCommand::MoveFast(_) => {
+                if let Waypoint::Position(xy) = waypoint {
+                    Some(xy.clone() - unit_pos)
+                } else {
+                    log::warn!("attack command without a waypoint!");
+                    None
+                }
+            },
+            UnitCurrentCommand::None_ => None,
+        }
         {
             let unit_distance = unit.current_speed() * time.delta_seconds;
-        
+            
             // using length_squared() for totally premature optimization
             let rel_distance_sq = relative_position.length_squared();
     

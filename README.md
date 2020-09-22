@@ -12,6 +12,7 @@ an AI opponent.
 - shift+lclick to toggle-select, ctrl+lclick to multi-select
 - Right click to set unit waypoint while selected
 - Units should move towards waypoint, and then transition to idle once they arrive
+- A unit can be a position on the map, or another unit (in which case it will follow it around)
 - "S" to stop unit
 - "R" to toggle run/walk
 - "ESC" to quit
@@ -21,7 +22,7 @@ an AI opponent.
 - drag-select
 - different icon for selected/unselected units
 - UI for unit state
-- unit waypoints to other units (HARD - how to I keep references to other query objects)
+- combat?
 
 ## Why?
 
