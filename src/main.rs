@@ -133,7 +133,7 @@ struct InputState {
     /// for double-click events
     last_mouse_action: Option<(Instant, MouseButton)>,
     /// should this be an option?
-    drag_select_start: XyPos,
+    drag_select_start: Option<XyPos>,
 }
 
 impl Default for InputState {
@@ -147,7 +147,7 @@ impl Default for InputState {
             is_multi_select_on: false,
             is_toggle_select_on: false,
             last_mouse_action: None,
-            drag_select_start: (0.0, 0.0).into(),
+            drag_select_start: None,
         }
     }
 }
@@ -155,7 +155,7 @@ impl Default for InputState {
 /// TODO handle rotation, does this also handle dynamic sprite sizing?
 /// TODO there is most certainly a better way of doing this math
 fn is_position_within_sprite(
-    position_to_check: XyPos,
+    position_to_check: &XyPos,
     sprite_position: &Vec3,
     sprite: &Sprite,
 ) -> bool {
@@ -163,6 +163,32 @@ fn is_position_within_sprite(
         && position_to_check.x() > (sprite_position.x() - sprite.size.x())
         && position_to_check.y() < (sprite_position.y() + sprite.size.y())
         && position_to_check.y() > (sprite_position.y() - sprite.size.y())
+}
+
+/// TODO  also fairly gross
+fn is_translation_within_box(
+    position_to_check: &Vec3,
+    corner: &Vec2,
+    end: &Vec2,
+) -> bool {
+    let in_x = if end.x() - corner.x() > 0.0 {
+        corner.x() < position_to_check.x() && position_to_check.x() < end.x()
+    } else {
+        corner.x() > position_to_check.x() && position_to_check.x() > end.x()
+    };
+    let in_y = if end.y() - corner.y() > 0.0 {
+        corner.y() < position_to_check.y() && position_to_check.y() < end.y()
+    } else {
+        corner.y() > position_to_check.y() && position_to_check.y() > end.y()
+    };
+    in_x && in_y
+}
+
+pub enum MouseCommand {
+    SingleSelect(XyPos),
+    DragSelect{start: XyPos, end: XyPos },
+    /// attack/move
+    Action(XyPos),
 }
 
 fn input_system(
@@ -202,22 +228,29 @@ fn input_system(
         }
     }
 
-    let mut mouse_command: Option<MouseButton> = None;
-    let mut mouse_pos: Option<XyPos> = None;
-
+    // mouse input
+    let mut mouse_command: Option<MouseCommand> = None;
     let mut is_double_click = false;
 
-    // get position and left/right of mouse button
     for ev in state.mousebtn.iter(&ev_mousebtn) {
+        // get last cursor position
+        let mouse_position = cursor.last_pos.clone(); 
+        // mouse_pos.replace(cursor.last_pos.clone());
+
         if ev.state.is_pressed() {
             // process on click
+
+            if ev.button == MouseButton::Left {
+                // start drag-select action
+                state.drag_select_start.replace(mouse_position.clone());
+            } else {
+                state.drag_select_start = None;
+            }
+            // TODO maybe have right click drag actions for movement paths?
         } else {
             // process on release
 
-            // get last cursor position
-            let position = cursor.last_pos.clone();
-            mouse_pos.replace(position);
-
+            // double-click logic
             if let Some((prev_time, prev_button)) = state.last_mouse_action {
                 if (Instant::now() - prev_time) < DOUBLE_CLICK_WINDOW && ev.button == prev_button {
                     is_double_click = true;
@@ -228,10 +261,15 @@ fn input_system(
                 .last_mouse_action
                 .replace((Instant::now(), ev.button.clone()));
 
+            // l/r command logic
             if ev.button == MouseButton::Right {
-                mouse_command.replace(MouseButton::Right);
+                mouse_command.replace(MouseCommand::Action(mouse_position));
             } else if ev.button == MouseButton::Left {
-                mouse_command.replace(MouseButton::Left);
+                if let Some(start) = state.drag_select_start {
+                    mouse_command.replace(MouseCommand::DragSelect{start, end: mouse_position});
+                } else {
+                    mouse_command.replace(MouseCommand::SingleSelect(mouse_position));
+                }
             } else {
                 // don't care about other buttons
                 // TODO use an actual command enum
@@ -239,66 +277,65 @@ fn input_system(
         }
     }
 
-    let mut any_unit_clicked: Option<Entity> = None;
+    // determine if any units were part of the selection
+    let mut selection_targets: Vec<Entity> = Vec::new();
 
-    // determine if the mouse action was on a unit or not
-    if let Some(selection_pos) = mouse_pos {
-        for (entity, mut unit, transform, sprite, _waypoint) in &mut query.iter() {
-            let unit_pos = transform.translation();
-
-            let unit_clicked = is_position_within_sprite(selection_pos, &unit_pos, sprite);
-            if unit_clicked {
-                any_unit_clicked.replace(entity);
-            }
-
-            // handle select/deselect
-            if let Some(command) = mouse_command {
-                if command == MouseButton::Left {
-                    if unit_clicked {
-                        if state.is_toggle_select_on {
-                            unit.invert_select();
-                        } else {
-                            unit.select();
-                        }
-                    } else {
-                        // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
-                        if !(state.is_multi_select_on || state.is_toggle_select_on) {
-                            unit.deselect();
-                        }
-                    }
+    // TODO abstract the mouse logic into another funciton
+    for (entity, mut _unit, transform, sprite, _waypoint) in &mut query.iter() {
+        let unit_pos = transform.translation();
+        match &mouse_command {
+            Some(MouseCommand::SingleSelect(pos)) | Some(MouseCommand::Action(pos)) => {
+                let unit_clicked = is_position_within_sprite(pos, &unit_pos, sprite);
+                if unit_clicked {
+                    selection_targets.push(entity);
                 }
-            }
+            },
+            Some(MouseCommand::DragSelect{start, end}) => {
+                if is_translation_within_box(&unit_pos, &start, &end) {
+                    selection_targets.push(entity);
+                }
+            },
+            None => (),
         }
     }
 
-    match (mouse_command, mouse_pos) {
-        (Some(MouseButton::Left), _) => {
-            // selection is handled in the query loop because life is complicated
-        }
-        (Some(MouseButton::Right), Some(mouse_pos)) => {
-            let mut cmd = if let Some(target) = any_unit_clicked {
+    match &mouse_command {
+        // perform selections
+        Some(MouseCommand::SingleSelect(_)) | Some(MouseCommand::DragSelect{start: _, end: _}) => {
+            for (entity, mut unit, _transform, _sprite, _waypoint) in &mut query.iter() {
+                if selection_targets.contains(&entity) {
+                    if state.is_toggle_select_on {
+                        unit.invert_select();
+                    } else {
+                        unit.select();
+                    }
+                } else {
+                    // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
+                    if !(state.is_multi_select_on || state.is_toggle_select_on) {
+                        unit.deselect();
+                    }
+                }
+            }
+        },
+        Some(MouseCommand::Action(pos)) => {
+            let mut cmd = if let Some(target) = selection_targets.into_iter().next() {
                 UnitCommands::AttackSlow(target)
             } else {
-                UnitCommands::MoveSlow(mouse_pos)
+                UnitCommands::MoveSlow(pos.clone())
             };
             if is_double_click {
                 cmd = cmd.to_fast();
             }
             new_commands.push(cmd);
-        }
-        _ => (),
+        },
+        None => (),
     }
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
-    for (_entity, mut unit, _transform, _sprite, mut waypoint) in &mut query.iter() {
+    for (_entity, mut unit, _transform, _sprite, mut _waypoint) in &mut query.iter() {
         if unit.is_selected() {
             for cmd in new_commands.clone() {
-                if let Some(xy) = mouse_pos {
-                    if cmd.has_waypoint() {
-                        *waypoint = Waypoint::Position(xy);
-                    }
-                }
                 log::info!("Assigning {:?} command", cmd);
                 unit.process_command(cmd.clone());
             }
