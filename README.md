@@ -13,6 +13,7 @@ an AI opponent.
 - Right click to set unit waypoint while selected
 - Units should move towards waypoint, and then transition to idle once they arrive
 - A unit can be a position on the map, or another unit (in which case it will follow it around)
+- double click actions perform the fast/run version of action
 - "S" to stop unit
 - "R" to toggle run/walk
 - "ESC" to quit

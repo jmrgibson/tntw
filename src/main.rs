@@ -1,15 +1,14 @@
 #![allow(dead_code)]
 
-use bevy::{
-    prelude::*,
-    render::pass::ClearColor,
-};
+use std::time::{Duration, Instant};
+
+use bevy::{prelude::*, render::pass::ClearColor};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
-use tntw::{UnitCurrentCommand, UnitState, UnitCommands, Unit, XyPos, Waypoint};
+use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
 
-
+const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 
 fn main() {
     env_logger::init();
@@ -37,20 +36,18 @@ fn setup(
         .spawn(Camera2dComponents::default())
         .spawn(UiCameraComponents::default());
 
-    let unit_start_positions= vec![
-        (50.0, 0.0),
-        (-50.0, 0.0),
-    ];
+    let unit_start_positions = vec![(50.0, 0.0), (-50.0, 0.0)];
 
     for (x, y) in unit_start_positions.into_iter() {
-        commands.spawn(SpriteComponents {
-            material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
-            transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
-            sprite: Sprite::new(Vec2::new(30.0, 30.0)),
-            ..Default::default()
-        })
-        .with(Unit::default())
-        .with(Waypoint::default());
+        commands
+            .spawn(SpriteComponents {
+                material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
+                transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
+                sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+                ..Default::default()
+            })
+            .with(Unit::default())
+            .with(Waypoint::default());
     }
 
     // set up cursor tracker
@@ -102,7 +99,6 @@ fn setup(
         .with(Collider::Solid);
 }
 
-
 struct SelectionMaterials {
     normal: Handle<ColorMaterial>,
     hovered: Handle<ColorMaterial>,
@@ -131,9 +127,11 @@ struct InputState {
     mousebtn: EventReader<MouseButtonInput>,
     scroll: EventReader<MouseWheel>,
     /// ie, ctrl+select
-    is_multi_select_on: bool, 
+    is_multi_select_on: bool,
     /// ie, shift+select
-    is_toggle_select_on: bool, 
+    is_toggle_select_on: bool,
+    /// for double-click events
+    last_mouse_action: Option<(Instant, MouseButton)>,
     /// should this be an option?
     drag_select_start: XyPos,
 }
@@ -148,6 +146,7 @@ impl Default for InputState {
             scroll: EventReader::default(),
             is_multi_select_on: false,
             is_toggle_select_on: false,
+            last_mouse_action: None,
             drag_select_start: (0.0, 0.0).into(),
         }
     }
@@ -155,9 +154,15 @@ impl Default for InputState {
 
 /// TODO handle rotation, does this also handle dynamic sprite sizing?
 /// TODO there is most certainly a better way of doing this math
-fn is_position_within_sprite(position_to_check: XyPos, sprite_position: &Vec3, sprite: &Sprite) -> bool {
-    position_to_check.x() < (sprite_position.x() + sprite.size.x()) && position_to_check.x() > (sprite_position.x() - sprite.size.x()) && 
-    position_to_check.y() < (sprite_position.y() + sprite.size.y()) && position_to_check.y() > (sprite_position.y() - sprite.size.y()) 
+fn is_position_within_sprite(
+    position_to_check: XyPos,
+    sprite_position: &Vec3,
+    sprite: &Sprite,
+) -> bool {
+    position_to_check.x() < (sprite_position.x() + sprite.size.x())
+        && position_to_check.x() > (sprite_position.x() - sprite.size.x())
+        && position_to_check.y() < (sprite_position.y() + sprite.size.y())
+        && position_to_check.y() > (sprite_position.y() - sprite.size.y())
 }
 
 fn input_system(
@@ -178,13 +183,12 @@ fn input_system(
             // on press
             if let Some(key) = ev.key_code {
                 match key {
-                    KeyCode::S => new_commands.push(UnitCommands::Stop), 
-                    KeyCode::R => new_commands.push(UnitCommands::ToggleSpeed), 
-                    KeyCode::LShift => state.is_toggle_select_on = true, 
-                    KeyCode::LControl => state.is_multi_select_on = true, 
+                    KeyCode::S => new_commands.push(UnitCommands::Stop),
+                    KeyCode::R => new_commands.push(UnitCommands::ToggleSpeed),
+                    KeyCode::LShift => state.is_toggle_select_on = true,
+                    KeyCode::LControl => state.is_multi_select_on = true,
                     _ => (),
                 };
-                
             }
         } else {
             // on release
@@ -195,12 +199,13 @@ fn input_system(
                     _ => (),
                 }
             }
-            
         }
     }
 
     let mut mouse_command: Option<MouseButton> = None;
     let mut mouse_pos: Option<XyPos> = None;
+
+    let mut is_double_click = false;
 
     // get position and left/right of mouse button
     for ev in state.mousebtn.iter(&ev_mousebtn) {
@@ -209,13 +214,23 @@ fn input_system(
         } else {
             // process on release
 
-            // get last cursor position 
+            // get last cursor position
             let position = cursor.last_pos.clone();
             mouse_pos.replace(position);
 
+            if let Some((prev_time, prev_button)) = state.last_mouse_action {
+                if (Instant::now() - prev_time) < DOUBLE_CLICK_WINDOW && ev.button == prev_button {
+                    is_double_click = true;
+                }
+            };
+
+            state
+                .last_mouse_action
+                .replace((Instant::now(), ev.button.clone()));
+
             if ev.button == MouseButton::Right {
                 mouse_command.replace(MouseButton::Right);
-            } else if ev.button == MouseButton::Left  {
+            } else if ev.button == MouseButton::Left {
                 mouse_command.replace(MouseButton::Left);
             } else {
                 // don't care about other buttons
@@ -223,9 +238,9 @@ fn input_system(
             }
         }
     }
-     
+
     let mut any_unit_clicked: Option<Entity> = None;
-    
+
     // determine if the mouse action was on a unit or not
     if let Some(selection_pos) = mouse_pos {
         for (entity, mut unit, transform, sprite, _waypoint) in &mut query.iter() {
@@ -244,7 +259,7 @@ fn input_system(
                             unit.invert_select();
                         } else {
                             unit.select();
-                        }   
+                        }
                     } else {
                         // don't unselect units that weren't clicked on if multi-select or toggle-select are enabled
                         if !(state.is_multi_select_on || state.is_toggle_select_on) {
@@ -256,19 +271,23 @@ fn input_system(
         }
     }
 
-   match (mouse_command, mouse_pos) {
-       (Some(MouseButton::Left), _) => {
-           // selection is handled in the query loop because life is complicated
-       },
-       (Some(MouseButton::Right), Some(mouse_pos)) => {
-           if let Some(target) = any_unit_clicked {
-                new_commands.push(UnitCommands::AttackSlow(target));
+    match (mouse_command, mouse_pos) {
+        (Some(MouseButton::Left), _) => {
+            // selection is handled in the query loop because life is complicated
+        }
+        (Some(MouseButton::Right), Some(mouse_pos)) => {
+            let mut cmd = if let Some(target) = any_unit_clicked {
+                UnitCommands::AttackSlow(target)
             } else {
-                new_commands.push(UnitCommands::MoveSlow(mouse_pos));
-           }
-       },
-       _ => (),
-   }
+                UnitCommands::MoveSlow(mouse_pos)
+            };
+            if is_double_click {
+                cmd = cmd.to_fast();
+            }
+            new_commands.push(cmd);
+        }
+        _ => (),
+    }
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
@@ -276,7 +295,7 @@ fn input_system(
         if unit.is_selected() {
             for cmd in new_commands.clone() {
                 if let Some(xy) = mouse_pos {
-                    if cmd.has_waypoint() { 
+                    if cmd.has_waypoint() {
                         *waypoint = Waypoint::Position(xy);
                     }
                 }
@@ -287,14 +306,12 @@ fn input_system(
     }
 }
 
-
 struct CursorState {
     cursor: EventReader<CursorMoved>,
     // need to identify the main camera
-    camera_e: Entity, 
+    camera_e: Entity,
     last_pos: XyPos,
 }
-
 
 /// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation stores it
 /// in a resource so that it can be accesed by the input system
@@ -304,7 +321,7 @@ fn cursor_system(
     // need to get window dimensions
     wnds: Res<Windows>,
     // query to get camera components
-    q_camera: Query<&Transform>
+    q_camera: Query<&Transform>,
 ) {
     let camera_transform = q_camera.get::<Transform>(state.camera_e).unwrap();
 
@@ -328,20 +345,23 @@ fn cursor_system(
 // for each unit, calculates the position of its next waypoint
 fn unit_waypoint_system(
     mut unit_query: Query<(&Unit, &mut Waypoint)>,
-    target_query: Query<&Transform>, 
+    target_query: Query<&Transform>,
 ) {
     for (unit, mut waypoint) in &mut unit_query.iter() {
         match &unit.current_command {
             UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
-                let target_translation = target_query.get::<Transform>(target.clone()).unwrap().translation();
-                *waypoint = Waypoint::Position((target_translation.x(), target_translation.y()).into());
-            },
+                let target_translation = target_query
+                    .get::<Transform>(target.clone())
+                    .unwrap()
+                    .translation();
+                *waypoint =
+                    Waypoint::Position((target_translation.x(), target_translation.y()).into());
+            }
             UnitCurrentCommand::MoveSlow(wp) | UnitCurrentCommand::MoveFast(wp) => {
                 // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
                 *waypoint = Waypoint::Position(wp.clone());
-            },
-            UnitCurrentCommand::None_ => {
-            },
+            }
+            UnitCurrentCommand::None_ => {}
         }
     }
 }
@@ -356,7 +376,7 @@ fn unit_movement_system(
     for (mut unit, mut transform, waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
-        
+
         // if the unit is going somewhere
         if let Some(relative_position) = match &unit.current_command {
             UnitCurrentCommand::AttackSlow(_) | UnitCurrentCommand::AttackFast(_) => {
@@ -366,7 +386,7 @@ fn unit_movement_system(
                     log::warn!("attack command without a waypoint!");
                     None
                 }
-            },     
+            }
             UnitCurrentCommand::MoveSlow(_) | UnitCurrentCommand::MoveFast(_) => {
                 if let Waypoint::Position(xy) = waypoint {
                     Some(xy.clone() - unit_pos)
@@ -374,20 +394,19 @@ fn unit_movement_system(
                     log::warn!("attack command without a waypoint!");
                     None
                 }
-            },
+            }
             UnitCurrentCommand::None_ => None,
-        }
-        {
+        } {
             let unit_distance = unit.current_speed() * time.delta_seconds;
-            
+
             // using length_squared() for totally premature optimization
             let rel_distance_sq = relative_position.length_squared();
-    
+
             // if we need to keep moving
             if unit_distance.powi(2) < rel_distance_sq {
                 // get direction
                 let direction = relative_position.normalize();
-    
+
                 // perform translation
                 *translation.x_mut() = translation.x() + (direction.x() * unit_distance);
                 *translation.y_mut() = translation.y() + (direction.y() * unit_distance);

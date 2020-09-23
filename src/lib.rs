@@ -71,6 +71,15 @@ impl UnitCommands {
             _ => false,
         }
     }
+
+    pub fn to_fast(self) -> Self {
+        use UnitCommands::*;
+        match self {
+            AttackSlow(e) => AttackFast(e),
+            MoveSlow(p) => MoveFast(p),
+            a => a,
+        }
+    }
 }
 
 impl Unit {
