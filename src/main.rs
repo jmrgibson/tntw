@@ -9,6 +9,7 @@ use bevy_input::mouse::*;
 use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
+const DRAG_SELECT_MIN_BOX: f32 = 25.0;
 
 fn main() {
     env_logger::init();
@@ -266,8 +267,15 @@ fn input_system(
                 mouse_command.replace(MouseCommand::Action(mouse_position));
             } else if ev.button == MouseButton::Left {
                 if let Some(start) = state.drag_select_start {
-                    mouse_command.replace(MouseCommand::DragSelect{start, end: mouse_position});
+                    log::debug!("drag select");
+                    if (start.x() - mouse_position.x()).abs() > DRAG_SELECT_MIN_BOX && (start.y() - mouse_position.y()).abs() > DRAG_SELECT_MIN_BOX {
+                        mouse_command.replace(MouseCommand::DragSelect{start, end: mouse_position});
+                    } else {
+                        log::debug!("single select");
+                        mouse_command.replace(MouseCommand::SingleSelect(mouse_position));
+                    }
                 } else {
+                    log::debug!("single select");
                     mouse_command.replace(MouseCommand::SingleSelect(mouse_position));
                 }
             } else {
