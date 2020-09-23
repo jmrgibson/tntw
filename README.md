@@ -17,10 +17,11 @@ an AI opponent.
 - "S" to stop unit
 - "R" to toggle run/walk
 - "ESC" to quit
+- drag-select
 
 ## Coming soon(tm)
 
-- drag-select
+- proper aabb selections?
 - different icon for selected/unselected units
 - UI for unit state
 - combat?
