@@ -30,6 +30,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
+    selection_materials: Res<SelectionMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -41,6 +42,8 @@ fn setup(
 
     let unit_start_positions = vec![(50.0, 0.0), (-50.0, 0.0)];
 
+ 
+
     for (x, y) in unit_start_positions.into_iter() {
         commands
             .spawn(SpriteComponents {
@@ -49,13 +52,42 @@ fn setup(
                 sprite: Sprite::new(Vec2::new(30.0, 30.0)),
                 ..Default::default()
             })
+            // .spawn(ButtonComponents {
+            //     style: Style {
+            //         size: Size::new(Val::Px(50.0), Val::Px(50.0)),
+            //         // center button
+            //         margin: Rect::all(Val::Auto),
+            //         // horizontally center child text
+            //         justify_content: JustifyContent::Center,
+            //         // vertically center child text
+            //         align_items: AlignItems::Center,
+            //         ..Default::default()
+            //     },
+            //     transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
+            //     material: selection_materials.normal,
+            //     ..Default::default()
+            // })
+            // .with_children(|parent| {
+            //     parent.spawn(TextComponents {
+            //         text: Text {
+            //             value: "".to_string(),
+            //             font: asset_server.load("assets/fonts/FiraSans-Bold.ttf").expect("Couldn't find font"),
+            //             style: TextStyle {
+            //                 font_size: 40.0,
+            //                 color: Color::rgb(0.8, 0.8, 0.8),
+            //             },
+            //         },
+            //         ..Default::default()
+            //     });
+            // })
             .with(Unit::default())
-            .with(Waypoint::default());
+            .with(Waypoint::default())
+            ;
     }
 
     // set up cursor tracker
     let camera = Camera2dComponents::default();
-    let e = commands.spawn(camera).current_entity().unwrap();
+    let e = commands.spawn(camera).current_entity().expect("Camera entity");
     commands.insert_resource(CursorState {
         cursor: Default::default(),
         camera_e: e,
@@ -110,7 +142,7 @@ struct SelectionMaterials {
 
 impl FromResources for SelectionMaterials {
     fn from_resources(resources: &Resources) -> Self {
-        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().unwrap();
+        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
         SelectionMaterials {
             normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
             hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
@@ -270,6 +302,8 @@ fn input_system(
             } else if ev.button == MouseButton::Left {
                 if let Some(start) = state.drag_select_start {
                     log::debug!("drag select");
+
+                    // TODO replace with proper AABB overlap
                     if (start.x() - mouse_position.x()).abs() > DRAG_SELECT_MIN_BOX && (start.y() - mouse_position.y()).abs() > DRAG_SELECT_MIN_BOX {
                         mouse_command.replace(MouseCommand::DragSelect{start, end: mouse_position});
                     } else {
@@ -362,9 +396,12 @@ struct CursorState {
 
 fn unit_display_system(
     materials: Res<SelectionMaterials>,
-    mut query: Query<(&Unit, &mut Handle<ColorMaterial>)>,
+    mut unit_query: Query<(&Unit, &mut Handle<ColorMaterial>)>,
+    // text_query: Query<&mut Text>,
 ) {
-    for (unit, mut material) in &mut query.iter() {
+    for (unit, mut material) in &mut unit_query.iter() {
+        // let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
+        // text.value = unit.state().display_text().to_string();
         *material = if unit.is_selected() {
             materials.selected
         } else {
@@ -383,11 +420,11 @@ fn cursor_system(
     // query to get camera components
     q_camera: Query<&Transform>,
 ) {
-    let camera_transform = q_camera.get::<Transform>(state.camera_e).unwrap();
+    let camera_transform = q_camera.get::<Transform>(state.camera_e).expect("Camera Pos");
 
     for ev in state.cursor.iter(&ev_cursor) {
         // get the size of the window that the event is for
-        let wnd = wnds.get(ev.id).unwrap();
+        let wnd = wnds.get(ev.id).expect("Window");
         let size = Vec2::new(wnd.width as f32, wnd.height as f32);
 
         // the default orthographic projection is in pixels from the center;
@@ -412,7 +449,7 @@ fn unit_waypoint_system(
             UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
                 let target_translation = target_query
                     .get::<Transform>(target.clone())
-                    .unwrap()
+                    .expect("Target translation")
                     .translation();
                 *waypoint =
                     Waypoint::Position((target_translation.x(), target_translation.y()).into());

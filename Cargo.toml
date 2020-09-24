@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 bevy = "0.2.1" 
+# bevy = { path = "../bevy" } 
 bevy_input = "0.2.1"
+# bevy_input = { path = "../bevy/crates/bevy_input" }
 env_logger = "0.7"
 log = "0.4" 

@@ -24,6 +24,7 @@ an AI opponent.
 
 - proper aabb selection boxes?
 - UI for unit state
+- box for drag-select
 - combat?
 
 ## Why

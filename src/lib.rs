@@ -32,7 +32,7 @@ pub enum UnitState {
 impl UnitState {
     pub fn display_text(&self) -> &str {
         match self {
-            UnitState::Idle => "I",
+            UnitState::Idle => "",
             UnitState::Firing => "F",
             UnitState::Melee => "M",
             UnitState::MovingFast => "R",
