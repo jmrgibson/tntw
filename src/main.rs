@@ -17,12 +17,14 @@ fn main() {
         .add_default_plugins()
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .init_resource::<InputState>()
+        .init_resource::<SelectionMaterials>()
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_startup_system(setup.system())
         .add_system(cursor_system.system())
         .add_system(input_system.system())
         .add_system(unit_waypoint_system.system())
         .add_system(unit_movement_system.system())
+        .add_system(unit_display_system.system())
         .run();
 }
 
@@ -356,6 +358,19 @@ struct CursorState {
     // need to identify the main camera
     camera_e: Entity,
     last_pos: XyPos,
+}
+
+fn unit_display_system(
+    materials: Res<SelectionMaterials>,
+    mut query: Query<(&Unit, &mut Handle<ColorMaterial>)>,
+) {
+    for (unit, mut material) in &mut query.iter() {
+        *material = if unit.is_selected() {
+            materials.selected
+        } else {
+            materials.normal
+        };
+    }
 }
 
 /// bevy doesn't provide a way of getting engine coordinates from the cursor, so this implementation stores it

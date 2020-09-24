@@ -18,15 +18,15 @@ an AI opponent.
 - "R" to toggle run/walk
 - "ESC" to quit
 - drag-select
+- different icon for selected/unselected units
 
 ## Coming soon(tm)
 
-- proper aabb selections?
-- different icon for selected/unselected units
+- proper aabb selection boxes?
 - UI for unit state
 - combat?
 
-## Why?
+## Why
 
 I started playing video games during quarantine/lockdown, but the built-in AI for most strategy games sucks.
 Rome 2 in particular is fun because its fairly immersive due to its realism, but when the AI do stupid things it
