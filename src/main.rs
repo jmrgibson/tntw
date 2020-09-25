@@ -11,6 +11,35 @@ use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 const DRAG_SELECT_MIN_BOX: f32 = 25.0;
 
+
+struct SelectionMaterials {
+    normal: Handle<ColorMaterial>,
+    hovered: Handle<ColorMaterial>,
+    selected: Handle<ColorMaterial>,
+}
+
+impl FromResources for SelectionMaterials {
+    fn from_resources(resources: &Resources) -> Self {
+        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
+        SelectionMaterials {
+            normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
+            hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
+            selected: materials.add(Color::rgb(0.1, 0.5, 0.1).into()),
+        }
+    }
+}
+
+#[derive(Default)]
+struct UiStateMaterials {
+    idle: Handle<ColorMaterial>,
+    moving: Handle<ColorMaterial>,
+    moving_fast: Handle<ColorMaterial>,
+}
+
+struct Ah {
+    idle: Handle<ColorMaterial>,
+}
+
 fn main() {
     env_logger::init();
     App::build()
@@ -18,8 +47,9 @@ fn main() {
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .init_resource::<InputState>()
         .init_resource::<SelectionMaterials>()
-        .add_system(bevy::input::system::exit_on_esc_system.system())
+        // .init_resource::<UiStateMaterials>()
         .add_startup_system(setup.system())
+        .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_system(cursor_system.system())
         .add_system(input_system.system())
         .add_system(unit_waypoint_system.system())
@@ -32,8 +62,37 @@ fn setup(
     mut commands: Commands,
     selection_materials: Res<SelectionMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    // mut ui_state_materials: ResMut<Assets<UiStateMaterials>>,
+    // mut ui_state_materials: ResMut<UiStateMaterials>,
     asset_server: Res<AssetServer>,
 ) {
+    
+    let hdl = Ah {
+        idle: materials.add(Color::rgb(0.5, 0.02, 0.02).into()),
+    };
+    commands.insert_resource(UiStateMaterials {
+        idle: asset_server.load("assets/textures/idle.png").unwrap(),
+        moving: asset_server.load("assets/textures/move.png").unwrap(),
+        moving_fast: asset_server.load("assets/textures/move_fast.png").unwrap(),
+    });
+
+    // ui_state_materials.idle =  asset_server.load("assets/textures/idle.png").unwrap();
+    // ui_state_materials.moving =  asset_server.load("assets/textures/move.png").unwrap();
+    // ui_state_materials.moving_fast =  asset_server.load("assets/textures/move_fast.png").unwrap();
+
+    // ui_state_materials.moving = asset_server.load("assets/textures/move.png").unwrap();
+    // ui_state_materials.moving_fast = asset_server.load("assets/textures/move_fast.png").unwrap();
+
+    // ui_state_materials.idle
+
+    // *state_icon = asset_server.load(match unit.state() {
+    //     UnitState::MovingSlow => "assets/textures/move.png",
+    //     UnitState::MovingFast => "assets/textures/move_fast.png",
+    //     _ => "assets/textures/idle.png",
+    // }).expect("asset load").into();
+
+    // asset_server.load_sync(assets, path)
+
     // Add the game's entities to our world
     commands
         // cameras
@@ -47,39 +106,20 @@ fn setup(
     for (x, y) in unit_start_positions.into_iter() {
         commands
             .spawn(SpriteComponents {
-                material: materials.add(Color::rgb(0.8, 0.2, 0.2).into()),
+                material: selection_materials.normal.into(),
                 transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
                 sprite: Sprite::new(Vec2::new(30.0, 30.0)),
                 ..Default::default()
             })
-            // .spawn(ButtonComponents {
-            //     style: Style {
-            //         size: Size::new(Val::Px(50.0), Val::Px(50.0)),
-            //         // center button
-            //         margin: Rect::all(Val::Auto),
-            //         // horizontally center child text
-            //         justify_content: JustifyContent::Center,
-            //         // vertically center child text
-            //         align_items: AlignItems::Center,
-            //         ..Default::default()
-            //     },
-            //     transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
-            //     material: selection_materials.normal,
-            //     ..Default::default()
-            // })
-            // .with_children(|parent| {
-            //     parent.spawn(TextComponents {
-            //         text: Text {
-            //             value: "".to_string(),
-            //             font: asset_server.load("assets/fonts/FiraSans-Bold.ttf").expect("Couldn't find font"),
-            //             style: TextStyle {
-            //                 font_size: 40.0,
-            //                 color: Color::rgb(0.8, 0.8, 0.8),
-            //             },
-            //         },
-            //         ..Default::default()
-            //     });
-            // })
+            .with_children(|parent| {
+                parent.spawn(SpriteComponents {
+                    material: selection_materials.normal.into(),
+                    transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
+                    sprite: Sprite::new(Vec2::new(30.0, 30.0)),
+                    ..Default::default()
+                });
+            })
+
             .with(Unit::default())
             .with(Waypoint::default())
             ;
@@ -132,23 +172,6 @@ fn setup(
             ..Default::default()
         })
         .with(Collider::Solid);
-}
-
-struct SelectionMaterials {
-    normal: Handle<ColorMaterial>,
-    hovered: Handle<ColorMaterial>,
-    selected: Handle<ColorMaterial>,
-}
-
-impl FromResources for SelectionMaterials {
-    fn from_resources(resources: &Resources) -> Self {
-        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
-        SelectionMaterials {
-            normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
-            hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
-            selected: materials.add(Color::rgb(0.1, 0.5, 0.1).into()),
-        }
-    }
 }
 
 enum Collider {
@@ -395,17 +418,19 @@ struct CursorState {
 }
 
 fn unit_display_system(
-    materials: Res<SelectionMaterials>,
-    mut unit_query: Query<(&Unit, &mut Handle<ColorMaterial>)>,
-    // text_query: Query<&mut Text>,
+    selection_materials: Res<SelectionMaterials>,
+    icon_materials: Res<UiStateMaterials>,
+    mut unit_query: Query<(&Unit, &mut Handle<ColorMaterial>, &Children)>,
+    icon_query: Query<&mut Handle<ColorMaterial>>,
 ) {
-    for (unit, mut material) in &mut unit_query.iter() {
-        // let mut text = text_query.get_mut::<Text>(children[0]).unwrap();
-        // text.value = unit.state().display_text().to_string();
+    for (unit, mut material, children) in &mut unit_query.iter() {
+        let mut state_icon = icon_query.get_mut::<Handle<ColorMaterial>>(children[0]).unwrap();
+        *state_icon = icon_materials.moving_fast;
+
         *material = if unit.is_selected() {
-            materials.selected
+            selection_materials.selected
         } else {
-            materials.normal
+            selection_materials.normal
         };
     }
 }

@@ -29,18 +29,6 @@ pub enum UnitState {
     MovingSlow,
 }
 
-impl UnitState {
-    pub fn display_text(&self) -> &str {
-        match self {
-            UnitState::Idle => "",
-            UnitState::Firing => "F",
-            UnitState::Melee => "M",
-            UnitState::MovingFast => "R",
-            UnitState::MovingSlow => "W",
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum UnitCurrentCommand {
     AttackFast(Entity),
