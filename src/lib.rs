@@ -5,6 +5,8 @@ use bevy::{
     sprite::collide_aabb::{collide, Collision},
 };
 
+pub mod ui;
+
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 
 pub type XyPos = Vec2;
