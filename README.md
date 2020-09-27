@@ -19,13 +19,15 @@ an AI opponent.
 - "ESC" to quit
 - drag-select
 - different icon for selected/unselected units
+- UI for unit state
 
 ## Coming soon(tm)
 
 - proper aabb selection boxes?
-- UI for unit state
+- actual textures for units
 - box for drag-select
 - combat?
+- unit acceleration and rotation
 
 ## Why
 
