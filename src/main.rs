@@ -13,7 +13,7 @@ use bevy_rapier2d::rapier::math::{Isometry};
 use bevy_rapier2d::render::RapierRenderPlugin;
 
 
-use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
+use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos, DebugTimer};
 use tntw::ui;
 use tntw::physics::*;
 
@@ -29,6 +29,7 @@ fn main() {
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .add_resource(BodyHandleToEntity(HashMap::new()))
         .add_resource(EntityToBodyHandle(HashMap::new()))
+        .add_resource(DebugTimer(Timer::from_seconds(1.0, true)))
         .init_resource::<InputState>()
         .init_resource::<ui::SelectionMaterials>()
         .add_startup_system(setup.system())
@@ -40,6 +41,7 @@ fn main() {
         .add_system(unit_proximity_interaction_system.system())
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
+        .add_system(physics_debug_system.system())
         .add_system(ui::unit_display_system.system())
         .run();
 }
@@ -82,6 +84,9 @@ fn setup(
                 sprite: Sprite::new(Vec2::new(unit_size, unit_size)),
                 ..Default::default()
             })
+            .with(Unit::default())
+            .with(Waypoint::default())
+            .with_bundle((body, collider))
             .with_children(|parent| {
                 parent.spawn(SpriteComponents {
                     material: selection_materials.normal.into(),
@@ -94,11 +99,6 @@ fn setup(
                     ..Default::default()
                 });
             })
-
-            .with(Unit::default())
-            .with(Waypoint::default())
-            .with(body)
-            .with(collider)
             ;
     }
 

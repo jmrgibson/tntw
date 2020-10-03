@@ -12,6 +12,8 @@ const WALKING_SPEED_FACTOR: f32 = 0.5;
 
 pub type XyPos = Vec2;
 
+pub struct DebugTimer(pub Timer);
+
 pub struct Unit {
     pub current_command: UnitCurrentCommand,
     max_speed: f32,

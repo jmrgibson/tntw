@@ -14,6 +14,8 @@ use std::collections::HashMap;
 pub struct BodyHandleToEntity(pub HashMap<RigidBodyHandle, Entity>);
 pub struct EntityToBodyHandle(pub HashMap<Entity, RigidBodyHandle>);
 
+use crate::DebugTimer;
+
 
 pub fn unit_proximity_interaction_system(
     events: Res<EventQueue>,
@@ -22,11 +24,13 @@ pub fn unit_proximity_interaction_system(
     // we can can ignore contact events because we are only using sensors, not
     // rigid contactors
     while let Ok(contact_event) = events.contact_events.pop() {
+        panic!();
         log::warn!("ASD");
     }
     
     // prox events are triggered between sensors and colliders (sensor or not)
     while let Ok(prox_event) = events.proximity_events.pop() {  
+        panic!();
         log::warn!("ASDaaa");
         // we can ignore WithinMargin because we don't need any special behaviour for that case
         // new_status is guaranteed to be != prev_status
@@ -53,6 +57,31 @@ pub fn body_to_entity_system(
         log::debug!("new rigid body");
         bh_to_e.0.insert(body_handle.handle(), entity);
         e_to_bh.0.insert(entity, body_handle.handle());
+    }
+}
+
+
+pub fn physics_debug_system(
+    time: Res<Time>,
+    mut debug_timer: ResMut<DebugTimer>,
+    mut bodies: ResMut<RigidBodySet>,
+    mut colliders: ResMut<ColliderSet>,
+    mut query: Query<(Entity, &RigidBodyHandleComponent)>,
+) {
+    debug_timer.0.tick(time.delta_seconds);
+    if debug_timer.0.finished {
+        // log::debug!("asd");
+        for (entity, body_handle) in &mut query.iter() {
+            let mut body = bodies.get_mut(body_handle.handle()).expect("body");
+            // body positions appear to be correct, and we have two colliders in existance...
+            // why u no collide?
+            log::trace!("entity {:?} at ({}, {})", entity, body.position.translation.x, body.position.translation.y);
+        }
+        log::trace!("#colliders: {}", colliders.len());
+        log::trace!("#bodies: {}", bodies.len());
+        for (idx, collider) in colliders.iter() {
+            log::trace!("collider {:?} at ({}, {})", idx, collider.position().translation.x, collider.position().translation.y);
+        }
     }
 }
 
