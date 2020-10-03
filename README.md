@@ -25,6 +25,7 @@ an AI opponent.
 
 - proper aabb selection boxes?
 - actual textures for units
+- unit collision detection
 - box for drag-select
 - combat?
 - unit acceleration and rotation

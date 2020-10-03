@@ -1,13 +1,20 @@
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use bevy::{prelude::*, render::pass::ClearColor};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
+use bevy_rapier2d::physics::{RapierPhysicsPlugin, RigidBodyHandleComponent};
+use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
+use bevy_rapier2d::rapier::geometry::{Proximity, ColliderBuilder};
+use bevy_rapier2d::rapier::math::{Isometry};
+
 
 use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
 use tntw::ui;
+use tntw::physics::*;
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 const DRAG_SELECT_MIN_BOX: f32 = 25.0;
@@ -16,16 +23,21 @@ fn main() {
     env_logger::init();
     App::build()
         .add_default_plugins()
+        .add_plugin(RapierPhysicsPlugin)
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
+        .add_resource(BodyHandleToEntity(HashMap::new()))
+        .add_resource(EntityToBodyHandle(HashMap::new()))
         .init_resource::<InputState>()
         .init_resource::<ui::SelectionMaterials>()
-        .init_resource::<ui::UiStateMaterials>()
         .add_startup_system(setup.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_system(cursor_system.system())
         .add_system(input_system.system())
         .add_system(unit_waypoint_system.system())
         .add_system(unit_movement_system.system())
+        .add_system(unit_proximity_interaction_system.system())
+        .add_system(body_to_entity_system.system())
+        .add_system(remove_rigid_body_system.system())
         .add_system(ui::unit_display_system.system())
         .run();
 }
@@ -34,26 +46,14 @@ fn setup(
     mut commands: Commands,
     selection_materials: Res<ui::SelectionMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    // mut ui_state_materials: ResMut<Assets<UiStateMaterials>>,
-    // mut ui_state_materials: ResMut<UiStateMaterials>,
     asset_server: Res<AssetServer>,
 ) {
-    // ui_state_materials.idle =  asset_server.load("assets/textures/idle.png").unwrap();
-    // ui_state_materials.moving =  asset_server.load("assets/textures/move.png").unwrap();
-    // ui_state_materials.moving_fast =  asset_server.load("assets/textures/move_fast.png").unwrap();
 
-    // ui_state_materials.moving = asset_server.load("assets/textures/move.png").unwrap();
-    // ui_state_materials.moving_fast = asset_server.load("assets/textures/move_fast.png").unwrap();
-
-    // ui_state_materials.idle
-
-    // *state_icon = asset_server.load(match unit.state() {
-    //     UnitState::MovingSlow => "assets/textures/move.png",
-    //     UnitState::MovingFast => "assets/textures/move_fast.png",
-    //     _ => "assets/textures/idle.png",
-    // }).expect("asset load").into();
-
-    // asset_server.load_sync(assets, path)
+    commands.insert_resource(ui::UiStateMaterials {
+        idle: materials.add(asset_server.load("assets/textures/idle.png").unwrap().into()),  // UPDATED
+        moving: materials.add(asset_server.load("assets/textures/move.png").unwrap().into()),  // UPDATED
+        moving_fast: materials.add(asset_server.load("assets/textures/move_fast.png").unwrap().into()), // UPDATED
+    });
 
     // Add the game's entities to our world
     commands
@@ -65,8 +65,12 @@ fn setup(
 
     let unit_size = 30.0;
     let state_icon_size = 12.0;
-
+    
     for (x, y) in unit_start_positions.into_iter() {
+        
+        let body = RigidBodyBuilder::new_kinematic().translation(x, y);
+        let collider = ColliderBuilder::cuboid(state_icon_size, state_icon_size);
+        
         commands
             .spawn(SpriteComponents {
                 material: selection_materials.normal.into(),
@@ -81,7 +85,7 @@ fn setup(
                         (unit_size / 2.0) + (state_icon_size / 2.0) + 5.0,
                         (unit_size / 2.0) - (state_icon_size / 2.0),
                         0.0
-                    )),
+                    )).with_scale(ui::ICON_SCALE),
                     sprite: Sprite::new(Vec2::new(state_icon_size, state_icon_size)),
                     ..Default::default()
                 });
@@ -89,6 +93,8 @@ fn setup(
 
             .with(Unit::default())
             .with(Waypoint::default())
+            .with(body)
+            .with(collider)
             ;
     }
 
@@ -437,16 +443,21 @@ fn unit_waypoint_system(
     }
 }
 
+
+
 // TODO have a separate component for waypoint position for all command types
 // that is updated in a separate system, so its calculated separately from the unit movement system
 // so we don't run into unique borrow issues
 fn unit_movement_system(
     time: Res<Time>,
-    mut unit_query: Query<(&mut Unit, &mut Transform, &Waypoint)>,
+    mut bodies: ResMut<RigidBodySet>,
+    mut unit_query: Query<(&mut Unit, &mut Transform, &mut RigidBodyHandleComponent, &Waypoint)>,
 ) {
-    for (mut unit, mut transform, waypoint) in &mut unit_query.iter() {
+    for (mut unit, mut transform, body_handle, waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
+
+        let mut body = bodies.get_mut(body_handle.handle()).expect("body");
 
         // if the unit is going somewhere
         if let Some(relative_position) = match &unit.current_command {
@@ -477,14 +488,23 @@ fn unit_movement_system(
             if unit_distance.powi(2) < rel_distance_sq {
                 // get direction
                 let direction = relative_position.normalize();
+                
+                // TODO don't reference sprite position, reference body position
 
-                // perform translation
-                *translation.x_mut() = translation.x() + (direction.x() * unit_distance);
-                *translation.y_mut() = translation.y() + (direction.y() * unit_distance);
+                // move body
+                let pos = Isometry::translation(
+                    translation.x() + (direction.x() * unit_distance),
+                    translation.y() + (direction.y() * unit_distance),
+                );
+
+                body.set_next_kinematic_position(pos);
             } else {
                 // can reach destination, set position to waypoint, transition to idle
-                *translation.x_mut() = translation.x() + relative_position.x();
-                *translation.y_mut() = translation.y() + relative_position.y();
+                let pos = Isometry::translation(
+                    translation.x() + relative_position.x(),
+                    translation.y() + relative_position.y(),
+                );
+                body.set_next_kinematic_position(pos);
                 log::debug!("reached destination");
                 unit.process_command(UnitCommands::Stop);
             }

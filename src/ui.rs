@@ -6,13 +6,15 @@ use bevy_input::mouse::*;
 
 use crate::{Unit, UnitState};
 
+
+pub const ICON_SCALE: f32 = 1.2;
+
 pub struct SelectionMaterials {
     pub normal: Handle<ColorMaterial>,
     pub hovered: Handle<ColorMaterial>,
     pub selected: Handle<ColorMaterial>,
 }
 
-/// Should be actual textures, but they are just colors for now until I get it works
 pub struct UiStateMaterials {
     pub idle: Handle<ColorMaterial>,
     pub moving: Handle<ColorMaterial>,
@@ -47,17 +49,6 @@ impl FromResources for SelectionMaterials {
             normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
             hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
             selected: materials.add(Color::rgb(0.1, 0.5, 0.1).into()),
-        }
-    }
-}
-
-impl FromResources for UiStateMaterials {
-    fn from_resources(resources: &Resources) -> Self {
-        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
-        UiStateMaterials {
-            idle: materials.add(Color::rgba(0.0, 0.0, 0.0, 0.0).into()),
-            moving: materials.add(Color::rgb(0.1, 0.1, 0.35).into()),
-            moving_fast: materials.add(Color::rgb(0.2, 0.2, 0.99).into()),
         }
     }
 }
