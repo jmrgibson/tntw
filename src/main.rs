@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 use bevy::{prelude::*, render::pass::ClearColor};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
-use bevy_rapier2d::physics::{RapierPhysicsPlugin, RigidBodyHandleComponent};
+use bevy_rapier2d::physics::{RapierPhysicsPlugin, RigidBodyHandleComponent, ColliderHandleComponent};
 use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{Proximity, ColliderBuilder};
+use bevy_rapier2d::rapier::geometry::{Proximity, ColliderBuilder, ColliderSet};
 use bevy_rapier2d::rapier::math::{Isometry};
 use bevy_rapier2d::render::RapierRenderPlugin;
 
@@ -38,11 +38,12 @@ fn main() {
         .add_system(input_system.system())
         .add_system(unit_waypoint_system.system())
         .add_system(unit_movement_system.system())
-        .add_system(unit_proximity_interaction_system.system())
+        // .add_system(unit_proximity_interaction_system.system())
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
         .add_system(ui::unit_display_system.system())
+        .add_system_to_stage(stage::POST_UPDATE, unit_proximity_interaction_system.system())
         .run();
 }
 
@@ -72,11 +73,13 @@ fn setup(
     
     for (x, y) in unit_start_positions.into_iter() {
         
-        let body = RigidBodyBuilder::new_dynamic().translation(x, y);
+        let body = RigidBodyBuilder::new_dynamic()
+            .translation(x, y)
+            .can_sleep(false); // things start annoyingly asleep
         let collider = ColliderBuilder
             ::cuboid(unit_size, unit_size)
             .sensor(true);
-        
+
         commands
             .spawn(SpriteComponents {
                 material: selection_materials.normal.into(),
@@ -455,15 +458,17 @@ fn unit_waypoint_system(
 fn unit_movement_system(
     time: Res<Time>,
     mut bodies: ResMut<RigidBodySet>,
-    mut unit_query: Query<(&mut Unit, &mut Transform, &mut RigidBodyHandleComponent, &Waypoint)>,
+    mut colliders: ResMut<ColliderSet>,
+    mut unit_query: Query<(&mut Unit, &mut Transform, &mut RigidBodyHandleComponent, &mut ColliderHandleComponent, &Waypoint)>,
 ) {
-    for (mut unit, mut transform, body_handle, waypoint) in &mut unit_query.iter() {
+    for (mut unit, mut transform, body_handle, collider_handle,  waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
 
         // TODO remove transform here, use rigid body pos
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
 
         let mut body = bodies.get_mut(body_handle.handle()).expect("body");
+        let mut collider = colliders.get_mut(collider_handle.handle()).expect("collider");
 
         // if the unit is going somewhere
         if let Some(dest) = match &unit.current_command {
@@ -504,6 +509,7 @@ fn unit_movement_system(
                 );
 
                 body.set_position(pos);
+                collider.set_position_debug(pos);
             } else {
                 // can reach destination, set position to waypoint, transition to idle
                 let pos = Isometry::translation(
@@ -511,6 +517,7 @@ fn unit_movement_system(
                     dest.y(),
                 );
                 body.set_position(pos);
+                collider.set_position_debug(pos);
                 log::debug!("reached destination");
                 unit.process_command(UnitCommands::Stop);
             }
