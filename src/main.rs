@@ -69,7 +69,9 @@ fn setup(
     for (x, y) in unit_start_positions.into_iter() {
         
         let body = RigidBodyBuilder::new_kinematic().translation(x, y);
-        let collider = ColliderBuilder::cuboid(state_icon_size, state_icon_size);
+        let collider = ColliderBuilder
+            ::cuboid(state_icon_size, state_icon_size)
+            .sensor(true);
         
         commands
             .spawn(SpriteComponents {
@@ -460,25 +462,27 @@ fn unit_movement_system(
         let mut body = bodies.get_mut(body_handle.handle()).expect("body");
 
         // if the unit is going somewhere
-        if let Some(relative_position) = match &unit.current_command {
+        if let Some(dest) = match &unit.current_command {
             UnitCurrentCommand::AttackSlow(_) | UnitCurrentCommand::AttackFast(_) => {
                 if let Waypoint::Position(xy) = waypoint {
-                    Some(xy.clone() - unit_pos)
+                    Some(xy)
                 } else {
-                    log::warn!("attack command without a waypoint!");
+                    log::error!("attack command without a waypoint!");
                     None
                 }
             }
             UnitCurrentCommand::MoveSlow(_) | UnitCurrentCommand::MoveFast(_) => {
                 if let Waypoint::Position(xy) = waypoint {
-                    Some(xy.clone() - unit_pos)
+                    Some(xy)
                 } else {
-                    log::warn!("attack command without a waypoint!");
+                    log::error!("attack command without a waypoint!");
                     None
                 }
             }
             UnitCurrentCommand::None_ => None,
         } {
+            let relative_position = dest.clone() - unit_pos;
+
             let unit_distance = unit.current_speed() * time.delta_seconds;
 
             // using length_squared() for totally premature optimization
@@ -493,16 +497,16 @@ fn unit_movement_system(
 
                 // move body
                 let pos = Isometry::translation(
-                    translation.x() + (direction.x() * unit_distance),
-                    translation.y() + (direction.y() * unit_distance),
+                    body.position.translation.vector.x + (direction.x() * unit_distance),
+                    body.position.translation.vector.y + (direction.y() * unit_distance),
                 );
 
                 body.set_next_kinematic_position(pos);
             } else {
                 // can reach destination, set position to waypoint, transition to idle
                 let pos = Isometry::translation(
-                    translation.x() + relative_position.x(),
-                    translation.y() + relative_position.y(),
+                    dest.x(),
+                    dest.y(),
                 );
                 body.set_next_kinematic_position(pos);
                 log::debug!("reached destination");
