@@ -21,11 +21,13 @@ pub fn unit_proximity_interaction_system(
 ) {
     // we can can ignore contact events because we are only using sensors, not
     // rigid contactors
-    // while let Ok(contact_event) = events.contact_events.pop() {
-    // }
-
+    while let Ok(contact_event) = events.contact_events.pop() {
+        log::warn!("ASD");
+    }
+    
     // prox events are triggered between sensors and colliders (sensor or not)
     while let Ok(prox_event) = events.proximity_events.pop() {  
+        log::warn!("ASDaaa");
         // we can ignore WithinMargin because we don't need any special behaviour for that case
         // new_status is guaranteed to be != prev_status
         match prox_event.new_status {
@@ -48,6 +50,7 @@ pub fn body_to_entity_system(
     mut added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
 ) {
     for (entity, body_handle) in &mut added.iter() {
+        log::debug!("new rigid body");
         bh_to_e.0.insert(body_handle.handle(), entity);
         e_to_bh.0.insert(entity, body_handle.handle());
     }
@@ -67,6 +70,7 @@ pub fn remove_rigid_body_system(
     query: Query<&RigidBodyHandleComponent>,
 ) {
     for entity in query.removed::<RigidBodyHandleComponent>().iter() {
+        log::debug!("removed rigid body");
         let handle = e_to_bh.0.get(entity).unwrap();
         pipeline.remove_rigid_body(
             *handle,

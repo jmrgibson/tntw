@@ -10,6 +10,7 @@ use bevy_rapier2d::physics::{RapierPhysicsPlugin, RigidBodyHandleComponent};
 use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
 use bevy_rapier2d::rapier::geometry::{Proximity, ColliderBuilder};
 use bevy_rapier2d::rapier::math::{Isometry};
+use bevy_rapier2d::render::RapierRenderPlugin;
 
 
 use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos};
@@ -24,6 +25,7 @@ fn main() {
     App::build()
         .add_default_plugins()
         .add_plugin(RapierPhysicsPlugin)
+        .add_plugin(RapierRenderPlugin) // for debugging
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .add_resource(BodyHandleToEntity(HashMap::new()))
         .add_resource(EntityToBodyHandle(HashMap::new()))
@@ -68,9 +70,9 @@ fn setup(
     
     for (x, y) in unit_start_positions.into_iter() {
         
-        let body = RigidBodyBuilder::new_kinematic().translation(x, y);
+        let body = RigidBodyBuilder::new_dynamic().translation(x, y);
         let collider = ColliderBuilder
-            ::cuboid(state_icon_size, state_icon_size)
+            ::cuboid(unit_size, unit_size)
             .sensor(true);
         
         commands
@@ -457,6 +459,8 @@ fn unit_movement_system(
 ) {
     for (mut unit, mut transform, body_handle, waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
+
+        // TODO remove transform here, use rigid body pos
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
 
         let mut body = bodies.get_mut(body_handle.handle()).expect("body");
@@ -493,22 +497,20 @@ fn unit_movement_system(
                 // get direction
                 let direction = relative_position.normalize();
                 
-                // TODO don't reference sprite position, reference body position
-
                 // move body
                 let pos = Isometry::translation(
                     body.position.translation.vector.x + (direction.x() * unit_distance),
                     body.position.translation.vector.y + (direction.y() * unit_distance),
                 );
 
-                body.set_next_kinematic_position(pos);
+                body.set_position(pos);
             } else {
                 // can reach destination, set position to waypoint, transition to idle
                 let pos = Isometry::translation(
                     dest.x(),
                     dest.y(),
                 );
-                body.set_next_kinematic_position(pos);
+                body.set_position(pos);
                 log::debug!("reached destination");
                 unit.process_command(UnitCommands::Stop);
             }
