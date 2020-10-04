@@ -16,7 +16,7 @@ pub fn unit_melee_system(
 
             if target_heath.current_health < 0.0 {
                 log::info!("unit dead!");
-                commands.despawn(target);
+                commands.despawn_recursive(target);
             }
         }
     }

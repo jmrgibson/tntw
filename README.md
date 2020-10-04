@@ -12,7 +12,7 @@ an AI opponent.
 - shift+lclick to toggle-select, ctrl+lclick to multi-select
 - Right click to set unit waypoint while selected
 - Units should move towards waypoint, and then transition to idle once they arrive
-- A unit can be a position on the map, or another unit (in which case it will follow it around)
+- A waypoint can be a position on the map, or another unit (in which case it will follow it around)
 - double click actions perform the fast/run version of action
 - "S" to stop unit
 - "R" to toggle run/walk
@@ -20,15 +20,16 @@ an AI opponent.
 - drag-select
 - different icon for selected/unselected units
 - UI for unit state
-- combat
+- rudimentray melee combat when units engage with eachother
 - unit collision detection
+- healthbars
 
 ## Coming soon(tm)
 
 - proper aabb selection boxes?
 - actual textures for units
 - proper combat
-- healthbars
+- ranged combat
 - teams
 - box for drag-select
 - unit acceleration and rotation
@@ -45,8 +46,13 @@ like a bit of a daunting task, so I decided to build my own simulator instead (b
 
 I picked bevy because I use Rust at work, and also the hackernews hype train.
 
+## RL training MVP requirements
 
-## Specs
-
-- units something something do this later 
-
+- determinism
+- abstracted command interface
+- serializable state
+- 4 unit types
+  - spear
+  - ranged
+  - sword
+  - cav
