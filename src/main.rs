@@ -38,6 +38,7 @@ fn main() {
         .add_resource(DebugTimer(Timer::from_seconds(1.0, true)))
         .init_resource::<InputState>()
         .init_resource::<ui::SelectionMaterials>()
+        .init_resource::<ui::HeathBarMaterials>()
         .init_resource::<TeamRelationshipLookup>()
         .add_event::<UnitInteractionEvent>()
         .add_startup_system(setup.system())
@@ -63,6 +64,7 @@ fn setup(
     mut commands: Commands,
     mut team_lookup: ResMut<TeamRelationshipLookup>,
     selection_materials: Res<ui::SelectionMaterials>,
+    healthbar_materials: Res<ui::HeathBarMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -145,9 +147,31 @@ fn setup(
             })
             // healthbar
             .with_children(|parent| {
+                let xpos = 0.0;
+                let ypos = -(unit_size / 2.0) - 5.0;
+
+                // background
                 parent.spawn(SpriteComponents {
-                    material: sele
-                })
+                    material: healthbar_materials.background.into(),
+                    transform: Transform::from_translation(Vec3::new(
+                        xpos,
+                        ypos,
+                        1.0,
+                    )),
+                    sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
+                    ..Default::default()
+                });
+                // foreground
+                parent.spawn(SpriteComponents {
+                    material: healthbar_materials.high.into(),
+                    transform: Transform::from_translation(Vec3::new(
+                        xpos,
+                        ypos,
+                        2.0,
+                    )),
+                    sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
+                    ..Default::default()
+                });
             })
             ;
     }

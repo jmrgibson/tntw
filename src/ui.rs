@@ -29,6 +29,7 @@ pub struct UiStateMaterials {
 
 pub fn unit_display_system(
     selection_materials: Res<SelectionMaterials>,
+    healthbar_materials: Res<HeathBarMaterials>,
     icon_materials: Res<UiStateMaterials>,
     mut unit_query: Query<(
         &UnitComponent,
@@ -37,23 +38,68 @@ pub fn unit_display_system(
         &Children,
     )>,
     icon_query: Query<&mut Handle<ColorMaterial>>,
+    sprite_query: Query<(&mut Sprite)>,
+    transform_query: Query<(&mut Transform)>,
 ) {
-    for (unit, _health, mut material, children) in &mut unit_query.iter() {
-        let mut state_icon = icon_query
-            .get_mut::<Handle<ColorMaterial>>(children[0])
-            .unwrap();
-        *state_icon = match unit.ui_state() {
-            UnitUiState::MovingSlow => icon_materials.moving,
-            UnitUiState::MovingFast => icon_materials.moving_fast,
-            UnitUiState::Melee => icon_materials.melee,
-            UnitUiState::Firing => icon_materials.firing,
-            _ => icon_materials.idle,
-        };
-        *material = if unit.is_selected() {
-            selection_materials.selected
-        } else {
-            selection_materials.normal
-        };
+    for (unit, health, mut material, children) in &mut unit_query.iter() {
+        // state icon
+        {
+            let mut state_icon = icon_query
+                .get_mut::<Handle<ColorMaterial>>(children[0])
+                .unwrap();
+            *state_icon = match unit.ui_state() {
+                UnitUiState::MovingSlow => icon_materials.moving,
+                UnitUiState::MovingFast => icon_materials.moving_fast,
+                UnitUiState::Melee => icon_materials.melee,
+                UnitUiState::Firing => icon_materials.firing,
+                _ => icon_materials.idle,
+            };
+        }
+
+        // selection status
+        {
+            *material = if unit.is_selected() {
+                selection_materials.selected
+            } else {
+                selection_materials.normal
+            };
+        }
+
+        // healthbar
+        {
+            // shrink healthbar, first get background as reference
+            let max_width = { 
+                sprite_query
+                    .get::<Sprite>(children[1])
+                    .unwrap()
+                    .size.x()
+            };
+            let left_anchor = {
+                transform_query
+                    .get::<Transform>(children[1])
+                    .unwrap()
+                    .translation().x() - (max_width / 2.0)
+            };
+            
+            // then update actual healtbar
+            let mut foreground = sprite_query
+                .get_mut::<Sprite>(children[2])
+                .unwrap();
+            
+            let bar_size = max_width * health.ratio();
+            foreground.size.set_x(bar_size);
+            
+            transform_query
+                .get_mut::<Transform>(children[2])
+                .unwrap()
+                .translation_mut().set_x(left_anchor + bar_size / 2.0);
+            
+            // update color
+            let mut healthbar = icon_query
+                .get_mut::<Handle<ColorMaterial>>(children[2])
+                .unwrap();
+            *healthbar = healthbar_materials.from_ratio(health.ratio());
+        }
     }
 }
 
@@ -85,7 +131,7 @@ impl FromResources for HeathBarMaterials {
 }
 
 impl HeathBarMaterials {
-    pub fn as_color(&self, health_ratio: f32) -> Handle<ColorMaterial> {
+    pub fn from_ratio(&self, health_ratio: f32) -> Handle<ColorMaterial> {
         if health_ratio >= 0.75 {
             self.high
         } else if health_ratio >= 0.25 {
