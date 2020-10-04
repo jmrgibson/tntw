@@ -20,15 +20,15 @@ an AI opponent.
 - drag-select
 - different icon for selected/unselected units
 - UI for unit state
+- combat?
+- unit collision detection
 
 ## Coming soon(tm)
 
 - proper aabb selection boxes?
 - actual textures for units
-- unit collision detection
 - teams
 - box for drag-select
-- combat?
 - unit acceleration and rotation
 
 ## Why
@@ -46,4 +46,5 @@ I picked bevy because I use Rust at work, and also the hackernews hype train.
 
 ## Specs
 
-- units 
+- units something something do this later 
+

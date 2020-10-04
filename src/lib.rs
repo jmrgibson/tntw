@@ -1,9 +1,6 @@
 #[deny(unreachable_patterns)]
-
 use bevy::{
     prelude::*,
-    render::pass::ClearColor,
-    sprite::collide_aabb::{collide, Collision},
 };
 
 use crate::physics::ContactType;
@@ -11,7 +8,6 @@ use crate::physics::ContactType;
 pub mod combat;
 pub mod physics;
 pub mod ui;
-
 
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 const MAX_HP: f32 = 100.0;
@@ -28,7 +24,7 @@ pub struct UnitInteractionState {
 #[derive(Clone, Copy, Debug)]
 pub enum UnitInteractionEvent {
     Proximity(ContactType),
-    Ui(Entity, UnitUiCommand)
+    Ui(Entity, UnitUiCommand),
 }
 
 pub struct UnitComponent {
@@ -38,7 +34,7 @@ pub struct UnitComponent {
     is_selected: bool,
     pub unit_type: UnitType,
     pub is_running: bool,
-    /// "guard mode" determines if the current unit will persue fleeing units if they 
+    /// "guard mode" determines if the current unit will persue fleeing units if they
     /// attempt to disengage melee
     pub guard_mode_enabled: bool,
     /// "fire at will" determines if the unit will automatically use ranged projectiles
@@ -132,7 +128,6 @@ impl UnitUiCommand {
             _ => false,
         }
     }
-
 }
 
 impl UnitComponent {
@@ -141,11 +136,11 @@ impl UnitComponent {
             UnitCurrentAction::Melee(_) => UnitUiState::Melee,
             UnitCurrentAction::Moving => {
                 if self.is_running {
-                    UnitUiState::MovingFast 
+                    UnitUiState::MovingFast
                 } else {
                     UnitUiState::MovingSlow
                 }
-            },
+            }
             UnitCurrentAction::Idle => UnitUiState::Idle,
             UnitCurrentAction::Firing(_) => UnitUiState::Firing,
         }
@@ -155,7 +150,7 @@ impl UnitComponent {
         log::debug!("Unit selected");
         self.is_selected = true;
     }
-    
+
     pub fn deselect(&mut self) {
         log::debug!("Unit deselected");
         self.is_selected = false;
@@ -184,21 +179,17 @@ impl UnitComponent {
 
     pub fn default_from_type(unit_type: UnitType) -> UnitComponent {
         match unit_type {
-            UnitType::MeleeInfantry => {
-                UnitComponent {
-                    max_speed: 50.0,
-                    unit_type,
-                    ..UnitComponent::default()
-                }
+            UnitType::MeleeInfantry => UnitComponent {
+                max_speed: 50.0,
+                unit_type,
+                ..UnitComponent::default()
             },
-            UnitType::SkirmishInfantry => {
-                UnitComponent {
-                    max_speed: 80.0,
-                    unit_type,
-                    ..UnitComponent::default()
-                }
+            UnitType::SkirmishInfantry => UnitComponent {
+                max_speed: 80.0,
+                unit_type,
+                ..UnitComponent::default()
             },
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 }

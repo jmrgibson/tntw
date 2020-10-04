@@ -1,10 +1,10 @@
 //! Systems and structs for the users interface
 
-use bevy::{prelude::*, render::pass::ClearColor};
-use bevy_input::keyboard::*;
-use bevy_input::mouse::*;
+use bevy::{prelude::*};
 
-use crate::{UnitComponent, UnitUiState, HealthComponent};
+
+
+use crate::{HealthComponent, UnitComponent, UnitUiState};
 
 pub const ICON_SCALE: f32 = 1.2;
 
@@ -31,11 +31,18 @@ pub struct UiStateMaterials {
 pub fn unit_display_system(
     selection_materials: Res<SelectionMaterials>,
     icon_materials: Res<UiStateMaterials>,
-    mut unit_query: Query<(&UnitComponent, &HealthComponent, &mut Handle<ColorMaterial>, &Children)>,
+    mut unit_query: Query<(
+        &UnitComponent,
+        &HealthComponent,
+        &mut Handle<ColorMaterial>,
+        &Children,
+    )>,
     icon_query: Query<&mut Handle<ColorMaterial>>,
 ) {
-    for (unit, health, mut material, children) in &mut unit_query.iter() {
-        let mut state_icon = icon_query.get_mut::<Handle<ColorMaterial>>(children[0]).unwrap();
+    for (unit, _health, mut material, children) in &mut unit_query.iter() {
+        let mut state_icon = icon_query
+            .get_mut::<Handle<ColorMaterial>>(children[0])
+            .unwrap();
         *state_icon = match unit.ui_state() {
             UnitUiState::MovingSlow => icon_materials.moving,
             UnitUiState::MovingFast => icon_materials.moving_fast,
@@ -53,7 +60,9 @@ pub fn unit_display_system(
 
 impl FromResources for SelectionMaterials {
     fn from_resources(resources: &Resources) -> Self {
-        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
+        let mut materials = resources
+            .get_mut::<Assets<ColorMaterial>>()
+            .expect("Colour resource");
         SelectionMaterials {
             normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
             hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
@@ -64,7 +73,9 @@ impl FromResources for SelectionMaterials {
 
 impl FromResources for HeathBarMaterials {
     fn from_resources(resources: &Resources) -> Self {
-        let mut materials = resources.get_mut::<Assets<ColorMaterial>>().expect("Colour resource");
+        let mut materials = resources
+            .get_mut::<Assets<ColorMaterial>>()
+            .expect("Colour resource");
         HeathBarMaterials {
             high: materials.add(Color::rgb(0.1, 0.9, 0.1).into()),
             medium: materials.add(Color::rgb(0.9, 0.9, 0.1).into()),
@@ -75,10 +86,10 @@ impl FromResources for HeathBarMaterials {
 
 impl HealthComponent {
     pub fn as_color(&self, mats: &Res<HeathBarMaterials>) -> Handle<ColorMaterial> {
-        let ratio= self.current_health /  self.max_health;
+        let ratio = self.current_health / self.max_health;
         if ratio >= 0.75 {
             mats.high
-        } else if ratio >= 0.25  {
+        } else if ratio >= 0.25 {
             mats.medium
         } else {
             mats.low

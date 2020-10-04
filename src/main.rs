@@ -6,17 +6,18 @@ use std::time::{Duration, Instant};
 use bevy::{prelude::*, render::pass::ClearColor};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
-use bevy_rapier2d::physics::{RapierPhysicsPlugin, RigidBodyHandleComponent, ColliderHandleComponent};
+use bevy_rapier2d::physics::{
+    ColliderHandleComponent, RapierPhysicsPlugin, RigidBodyHandleComponent,
+};
 use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{Proximity, ColliderBuilder, ColliderSet};
-use bevy_rapier2d::rapier::math::{Isometry};
+use bevy_rapier2d::rapier::geometry::{ColliderBuilder, ColliderSet};
+use bevy_rapier2d::rapier::math::Isometry;
 use bevy_rapier2d::render::RapierRenderPlugin;
 
-
-use tntw::*;
-use tntw::ui;
-use tntw::physics::*;
 use tntw::combat::*;
+use tntw::physics::*;
+use tntw::ui;
+use tntw::*;
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 const DRAG_SELECT_MIN_BOX: f32 = 25.0;
@@ -46,7 +47,10 @@ fn main() {
         .add_system(physics_debug_system.system())
         .add_system(unit_melee_system.system())
         .add_system(ui::unit_display_system.system())
-        .add_system_to_stage(stage::POST_UPDATE, unit_proximity_interaction_system.system())
+        .add_system_to_stage(
+            stage::POST_UPDATE,
+            unit_proximity_interaction_system.system(),
+        )
         .run();
 }
 
@@ -56,12 +60,31 @@ fn setup(
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
-
     commands.insert_resource(ui::UiStateMaterials {
-        idle: materials.add(asset_server.load("assets/textures/idle.png").unwrap().into()),  // UPDATED
-        moving: materials.add(asset_server.load("assets/textures/move.png").unwrap().into()),  // UPDATED
-        moving_fast: materials.add(asset_server.load("assets/textures/move_fast.png").unwrap().into()), // UPDATED
-        melee: materials.add(asset_server.load("assets/textures/swords.png").unwrap().into()), // UPDATED
+        idle: materials.add(
+            asset_server
+                .load("assets/textures/idle.png")
+                .unwrap()
+                .into(),
+        ), // UPDATED
+        moving: materials.add(
+            asset_server
+                .load("assets/textures/move.png")
+                .unwrap()
+                .into(),
+        ), // UPDATED
+        moving_fast: materials.add(
+            asset_server
+                .load("assets/textures/move_fast.png")
+                .unwrap()
+                .into(),
+        ), // UPDATED
+        melee: materials.add(
+            asset_server
+                .load("assets/textures/swords.png")
+                .unwrap()
+                .into(),
+        ), // UPDATED
         firing: materials.add(asset_server.load("assets/textures/bow.png").unwrap().into()), // UPDATED
     });
 
@@ -72,20 +95,18 @@ fn setup(
         .spawn(UiCameraComponents::default());
 
     let unit_start_positions = vec![
-        (UnitType::SkirmishInfantry, 50.0, 0.0), (UnitType::MeleeInfantry, -50.0, 0.0)
+        (UnitType::SkirmishInfantry, 50.0, 0.0),
+        (UnitType::MeleeInfantry, -50.0, 0.0),
     ];
 
     let unit_size = 30.0;
     let state_icon_size = 12.0;
-    
+
     for (ut, x, y) in unit_start_positions.into_iter() {
-        
         let body = RigidBodyBuilder::new_dynamic()
             .translation(x, y)
             .can_sleep(false); // things start annoyingly asleep
-        let collider = ColliderBuilder
-            ::cuboid(unit_size / 2.0, unit_size / 2.0)
-            .sensor(true);
+        let collider = ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true);
 
         commands
             .spawn(SpriteComponents {
@@ -104,18 +125,21 @@ fn setup(
                     transform: Transform::from_translation(Vec3::new(
                         (unit_size / 2.0) + (state_icon_size / 2.0) + 5.0,
                         (unit_size / 2.0) - (state_icon_size / 2.0),
-                        0.0
-                    )).with_scale(ui::ICON_SCALE),
+                        0.0,
+                    ))
+                    .with_scale(ui::ICON_SCALE),
                     sprite: Sprite::new(Vec2::new(state_icon_size, state_icon_size)),
                     ..Default::default()
                 });
-            })
-            ;
+            });
     }
 
     // set up cursor tracker
     let camera = Camera2dComponents::default();
-    let e = commands.spawn(camera).current_entity().expect("Camera entity");
+    let e = commands
+        .spawn(camera)
+        .current_entity()
+        .expect("Camera entity");
     commands.insert_resource(CursorState {
         cursor: Default::default(),
         camera_e: e,
@@ -212,11 +236,7 @@ fn is_position_within_sprite(
 }
 
 /// TODO  also fairly gross
-fn is_translation_within_box(
-    position_to_check: &Vec3,
-    corner: &Vec2,
-    end: &Vec2,
-) -> bool {
+fn is_translation_within_box(position_to_check: &Vec3, corner: &Vec2, end: &Vec2) -> bool {
     let in_x = if end.x() - corner.x() > 0.0 {
         corner.x() < position_to_check.x() && position_to_check.x() < end.x()
     } else {
@@ -232,7 +252,10 @@ fn is_translation_within_box(
 
 pub enum MouseCommand {
     SingleSelect(XyPos),
-    DragSelect{start: XyPos, end: XyPos },
+    DragSelect {
+        start: XyPos,
+        end: XyPos,
+    },
     /// attack/move
     Action(XyPos),
 }
@@ -243,7 +266,13 @@ fn input_system(
     ev_keys: Res<Events<KeyboardInput>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    mut query: Query<(Entity, &mut UnitComponent, &Transform, &Sprite, &mut WaypointComponent)>,
+    mut query: Query<(
+        Entity,
+        &mut UnitComponent,
+        &Transform,
+        &Sprite,
+        &mut WaypointComponent,
+    )>,
 ) {
     let mut new_commands: Vec<UnitUiCommand> = Vec::new();
 
@@ -280,7 +309,7 @@ fn input_system(
 
     for ev in state.mousebtn.iter(&ev_mousebtn) {
         // get last cursor position
-        let mouse_position = cursor.last_pos.clone(); 
+        let mouse_position = cursor.last_pos.clone();
         // mouse_pos.replace(cursor.last_pos.clone());
 
         if ev.state.is_pressed() {
@@ -292,7 +321,7 @@ fn input_system(
             } else {
                 state.drag_select_start = None;
             }
-            // TODO maybe have right click drag actions for movement paths?
+        // TODO maybe have right click drag actions for movement paths?
         } else {
             // process on release
 
@@ -315,8 +344,13 @@ fn input_system(
                     log::debug!("drag select");
 
                     // TODO replace with proper AABB overlap
-                    if (start.x() - mouse_position.x()).abs() > DRAG_SELECT_MIN_BOX && (start.y() - mouse_position.y()).abs() > DRAG_SELECT_MIN_BOX {
-                        mouse_command.replace(MouseCommand::DragSelect{start, end: mouse_position});
+                    if (start.x() - mouse_position.x()).abs() > DRAG_SELECT_MIN_BOX
+                        && (start.y() - mouse_position.y()).abs() > DRAG_SELECT_MIN_BOX
+                    {
+                        mouse_command.replace(MouseCommand::DragSelect {
+                            start,
+                            end: mouse_position,
+                        });
                     } else {
                         log::debug!("single select");
                         mouse_command.replace(MouseCommand::SingleSelect(mouse_position));
@@ -344,19 +378,20 @@ fn input_system(
                 if unit_clicked {
                     selection_targets.push(entity);
                 }
-            },
-            Some(MouseCommand::DragSelect{start, end}) => {
+            }
+            Some(MouseCommand::DragSelect { start, end }) => {
                 if is_translation_within_box(&unit_pos, &start, &end) {
                     selection_targets.push(entity);
                 }
-            },
+            }
             None => (),
         }
     }
 
     match &mouse_command {
         // perform selections
-        Some(MouseCommand::SingleSelect(_)) | Some(MouseCommand::DragSelect{start: _, end: _}) => {
+        Some(MouseCommand::SingleSelect(_))
+        | Some(MouseCommand::DragSelect { start: _, end: _ }) => {
             for (entity, mut unit, _transform, _sprite, _waypoint) in &mut query.iter() {
                 if selection_targets.contains(&entity) {
                     if state.is_toggle_select_on {
@@ -371,26 +406,26 @@ fn input_system(
                     }
                 }
             }
-        },
+        }
         Some(MouseCommand::Action(pos)) => {
             let speed = if is_double_click {
                 UnitUiSpeedCommand::Run
             } else {
                 UnitUiSpeedCommand::Walk
             };
-            let mut cmd = if let Some(target) = selection_targets.into_iter().next() {
+            let cmd = if let Some(target) = selection_targets.into_iter().next() {
                 UnitUiCommand::Attack(target, speed)
             } else {
                 UnitUiCommand::Move(pos.clone(), speed)
             };
             new_commands.push(cmd);
-        },
+        }
         None => (),
     }
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
-    for (entity, mut unit, _transform, _sprite, mut _waypoint) in &mut query.iter() {
+    for (entity, unit, _transform, _sprite, mut _waypoint) in &mut query.iter() {
         if unit.is_selected() {
             for cmd in new_commands.clone() {
                 unit_events.send(UnitInteractionEvent::Ui(entity, cmd));
@@ -417,7 +452,9 @@ fn cursor_system(
     // query to get camera components
     q_camera: Query<&Transform>,
 ) {
-    let camera_transform = q_camera.get::<Transform>(state.camera_e).expect("Camera Pos");
+    let camera_transform = q_camera
+        .get::<Transform>(state.camera_e)
+        .expect("Camera Pos");
 
     for ev in state.cursor.iter(&ev_cursor) {
         // get the size of the window that the event is for
@@ -436,11 +473,11 @@ fn cursor_system(
     }
 }
 
-pub fn is_same_team(u1: RefMut<UnitComponent>, u2: RefMut<UnitComponent>) -> bool {
+pub fn is_same_team(_u1: RefMut<UnitComponent>, _u2: RefMut<UnitComponent>) -> bool {
     false
 }
 
-/// handles events that changes the commands and state for each unit. 
+/// handles events that changes the commands and state for each unit.
 /// processes the following inputs:
 /// - unit proximity interactions
 /// - TODO user commands
@@ -449,9 +486,13 @@ fn unit_event_system(
     events: Res<Events<UnitInteractionEvent>>,
     units: Query<&mut UnitComponent>,
 ) {
-    /// this processes interactions one unit at a time within its own scope 
+    /// this processes interactions one unit at a time within its own scope
     /// so we don't double-borrow the Unit Component
-    fn process_unit_disengage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
+    fn process_unit_disengage(
+        unit_id: Entity,
+        target_id: Entity,
+        units: &Query<&mut UnitComponent>,
+    ) {
         let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         if unit.guard_mode_enabled {
             log::debug!("disengaging in melee");
@@ -468,27 +509,35 @@ fn unit_event_system(
     }
 
     fn process_unit_engage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
-        log::debug!("engaging in melee between {:?} and {:?}", unit_id, target_id);
+        log::debug!(
+            "engaging in melee between {:?} and {:?}",
+            unit_id,
+            target_id
+        );
         let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         unit.current_action = UnitCurrentAction::Melee(target_id);
     }
 
-    fn process_unit_command(unit_id: Entity, cmd: UnitUiCommand, units: &Query<&mut UnitComponent>) {
+    fn process_unit_command(
+        unit_id: Entity,
+        cmd: UnitUiCommand,
+        units: &Query<&mut UnitComponent>,
+    ) {
         use UnitUiCommand::*;
         let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         match cmd {
             Attack(target, speed) => {
                 unit.current_command = UnitUserCommand::Attack(target);
                 unit.is_running = speed == UnitUiSpeedCommand::Run;
-            },
+            }
             Move(pos, speed) => {
                 unit.current_command = UnitUserCommand::Move(pos);
                 unit.current_action = UnitCurrentAction::Moving;
                 unit.is_running = speed == UnitUiSpeedCommand::Run;
-            },
+            }
             Stop => {
                 unit.current_command = UnitUserCommand::None_;
-            },
+            }
             ToggleGuardMode => unit.guard_mode_enabled = !unit.guard_mode_enabled,
             ToggleFireAtWill => unit.fire_at_will = !unit.fire_at_will,
             ToggleSpeed => unit.is_running = !unit.is_running,
@@ -496,7 +545,7 @@ fn unit_event_system(
         log::debug!("unit current command: {:?}", unit.current_command);
     }
 
-    // process state updates for units that have new events  
+    // process state updates for units that have new events
     for event in state.event_reader.iter(&events) {
         log::debug!("event: {:?}", &event);
         match event.clone() {
@@ -506,24 +555,22 @@ fn unit_event_system(
                         // separate scopes so we don't double-borrow the Unit component
                         process_unit_disengage(e1, e2, &units);
                         process_unit_disengage(e2, e1, &units);
-                    },
+                    }
                     ContactType::UnitUnitMeleeEngage(e1, e2) => {
                         process_unit_engage(e1, e2, &units);
                         process_unit_engage(e2, e1, &units);
-                    },
+                    }
                     ContactType::UnitWaypointReached(e1) => {
                         let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
                         unit.current_command = UnitUserCommand::None_;
                     }
                 }
-            },
+            }
             UnitInteractionEvent::Ui(entity, cmd) => {
                 process_unit_command(entity, cmd, &units);
-            },
+            }
         }
     }
-
-
 }
 /// for each unit, calculates the position of its waypoint
 fn unit_waypoint_system(
@@ -537,8 +584,9 @@ fn unit_waypoint_system(
                     .get::<Transform>(target.clone())
                     .expect("Target translation")
                     .translation();
-                *waypoint =
-                    WaypointComponent::Position((target_translation.x(), target_translation.y()).into());
+                *waypoint = WaypointComponent::Position(
+                    (target_translation.x(), target_translation.y()).into(),
+                );
             }
             UnitUserCommand::Move(wp) => {
                 // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
@@ -557,16 +605,27 @@ fn unit_movement_system(
     mut bodies: ResMut<RigidBodySet>,
     mut colliders: ResMut<ColliderSet>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    mut unit_query: Query<(Entity, &mut UnitComponent, &mut Transform, &mut RigidBodyHandleComponent, &mut ColliderHandleComponent, &WaypointComponent)>,
+    mut unit_query: Query<(
+        Entity,
+        &mut UnitComponent,
+        &mut Transform,
+        &mut RigidBodyHandleComponent,
+        &mut ColliderHandleComponent,
+        &WaypointComponent,
+    )>,
 ) {
-    for (entity, mut unit, mut transform, body_handle, collider_handle,  waypoint) in &mut unit_query.iter() {
+    for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
+        &mut unit_query.iter()
+    {
         let translation = transform.translation_mut();
 
         // TODO remove transform here, use rigid body pos
         let unit_pos: XyPos = (translation.x(), translation.y()).into();
 
         let mut body = bodies.get_mut(body_handle.handle()).expect("body");
-        let mut collider = colliders.get_mut(collider_handle.handle()).expect("collider");
+        let collider = colliders
+            .get_mut(collider_handle.handle())
+            .expect("collider");
 
         // if the unit is going somewhere
         if let UnitCurrentAction::Moving = &unit.current_action {
@@ -600,7 +659,7 @@ fn unit_movement_system(
                 if unit_distance.powi(2) < rel_distance_sq {
                     // get direction
                     let direction = relative_position.normalize();
-                    
+
                     // move body
                     let pos = Isometry::translation(
                         body.position.translation.vector.x + (direction.x() * unit_distance),
@@ -611,13 +670,12 @@ fn unit_movement_system(
                     collider.set_position_debug(pos);
                 } else {
                     // can reach destination, set position to waypoint, transition to idle
-                    let pos = Isometry::translation(
-                        dest.x(),
-                        dest.y(),
-                    );
+                    let pos = Isometry::translation(dest.x(), dest.y());
                     body.set_position(pos);
                     collider.set_position_debug(pos);
-                    unit_events.send(UnitInteractionEvent::Proximity(ContactType::UnitWaypointReached(entity)));
+                    unit_events.send(UnitInteractionEvent::Proximity(
+                        ContactType::UnitWaypointReached(entity),
+                    ));
                 }
             }
         }
