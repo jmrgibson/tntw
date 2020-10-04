@@ -1,8 +1,6 @@
 //! Systems and structs for the users interface
 
-use bevy::{prelude::*};
-
-
+use bevy::prelude::*;
 
 use crate::{HealthComponent, UnitComponent, UnitUiState};
 
@@ -18,6 +16,7 @@ pub struct HeathBarMaterials {
     pub high: Handle<ColorMaterial>,
     pub medium: Handle<ColorMaterial>,
     pub low: Handle<ColorMaterial>,
+    pub background: Handle<ColorMaterial>,
 }
 
 pub struct UiStateMaterials {
@@ -80,19 +79,25 @@ impl FromResources for HeathBarMaterials {
             high: materials.add(Color::rgb(0.1, 0.9, 0.1).into()),
             medium: materials.add(Color::rgb(0.9, 0.9, 0.1).into()),
             low: materials.add(Color::rgb(0.9, 0.1, 0.1).into()),
+            background: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
         }
     }
 }
 
-impl HealthComponent {
-    pub fn as_color(&self, mats: &Res<HeathBarMaterials>) -> Handle<ColorMaterial> {
-        let ratio = self.current_health / self.max_health;
-        if ratio >= 0.75 {
-            mats.high
-        } else if ratio >= 0.25 {
-            mats.medium
+impl HeathBarMaterials {
+    pub fn as_color(&self, health_ratio: f32) -> Handle<ColorMaterial> {
+        if health_ratio >= 0.75 {
+            self.high
+        } else if health_ratio >= 0.25 {
+            self.medium
         } else {
-            mats.low
+            self.low
         }
+    }
+}
+
+impl HealthComponent { 
+    pub fn ratio(&self) -> f32 {
+        self.current_health / self.max_health
     }
 }

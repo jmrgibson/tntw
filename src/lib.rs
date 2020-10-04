@@ -4,10 +4,13 @@ use bevy::{
 };
 
 use crate::physics::ContactType;
+use crate::teams::*;
 
 pub mod combat;
 pub mod physics;
+pub mod teams;
 pub mod ui;
+pub mod units;
 
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 const MAX_HP: f32 = 100.0;
@@ -32,6 +35,7 @@ pub struct UnitComponent {
     pub current_action: UnitCurrentAction,
     max_speed: f32,
     is_selected: bool,
+    pub team: TeamId,
     pub unit_type: UnitType,
     pub is_running: bool,
     /// "guard mode" determines if the current unit will persue fleeing units if they
@@ -120,16 +124,6 @@ pub enum UnitUiSpeedCommand {
     Walk,
 }
 
-impl UnitUiCommand {
-    pub fn has_waypoint(&self) -> bool {
-        use UnitUiCommand::*;
-        match self {
-            Attack(_, _) | Move(_, _) => true,
-            _ => false,
-        }
-    }
-}
-
 impl UnitComponent {
     pub fn ui_state(&self) -> UnitUiState {
         match &self.current_action {
@@ -177,16 +171,18 @@ impl UnitComponent {
         }
     }
 
-    pub fn default_from_type(unit_type: UnitType) -> UnitComponent {
+    pub fn default_from_type(unit_type: UnitType, team: TeamId) -> UnitComponent {
         match unit_type {
             UnitType::MeleeInfantry => UnitComponent {
                 max_speed: 50.0,
                 unit_type,
+                team,
                 ..UnitComponent::default()
             },
             UnitType::SkirmishInfantry => UnitComponent {
                 max_speed: 80.0,
                 unit_type,
+                team,
                 ..UnitComponent::default()
             },
             _ => unimplemented!(),
@@ -206,6 +202,7 @@ impl Default for UnitComponent {
             unit_type: UnitType::MeleeInfantry,
             remaining_ammo: 10,
             fire_at_will: true,
+            team: 0,
         }
     }
 }

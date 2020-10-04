@@ -1,3 +1,5 @@
+//! systems and types for proximity interations for units
+
 use bevy::prelude::*;
 use bevy_rapier2d::{
     physics::RigidBodyHandleComponent, rapier::dynamics::JointSet,
@@ -7,8 +9,7 @@ use bevy_rapier2d::{
 };
 
 use bevy_rapier2d::physics::EventQueue;
-
-use bevy_rapier2d::rapier::geometry::{Proximity};
+use bevy_rapier2d::rapier::geometry::Proximity;
 
 use std::collections::HashMap;
 pub struct BodyHandleToEntity(pub HashMap<RigidBodyHandle, Entity>);

@@ -20,13 +20,15 @@ an AI opponent.
 - drag-select
 - different icon for selected/unselected units
 - UI for unit state
-- combat?
+- combat
 - unit collision detection
 
 ## Coming soon(tm)
 
 - proper aabb selection boxes?
 - actual textures for units
+- proper combat
+- healthbars
 - teams
 - box for drag-select
 - unit acceleration and rotation

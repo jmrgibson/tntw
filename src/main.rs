@@ -14,9 +14,13 @@ use bevy_rapier2d::rapier::geometry::{ColliderBuilder, ColliderSet};
 use bevy_rapier2d::rapier::math::Isometry;
 use bevy_rapier2d::render::RapierRenderPlugin;
 
+use itertools::Itertools;
+
 use tntw::combat::*;
 use tntw::physics::*;
+use tntw::teams::*;
 use tntw::ui;
+use tntw::units::*;
 use tntw::*;
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
@@ -34,6 +38,7 @@ fn main() {
         .add_resource(DebugTimer(Timer::from_seconds(1.0, true)))
         .init_resource::<InputState>()
         .init_resource::<ui::SelectionMaterials>()
+        .init_resource::<TeamRelationshipLookup>()
         .add_event::<UnitInteractionEvent>()
         .add_startup_system(setup.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
@@ -56,6 +61,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
+    mut team_lookup: ResMut<TeamRelationshipLookup>,
     selection_materials: Res<ui::SelectionMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     asset_server: Res<AssetServer>,
@@ -66,25 +72,25 @@ fn setup(
                 .load("assets/textures/idle.png")
                 .unwrap()
                 .into(),
-        ), // UPDATED
+        ),
         moving: materials.add(
             asset_server
                 .load("assets/textures/move.png")
                 .unwrap()
                 .into(),
-        ), // UPDATED
+        ),
         moving_fast: materials.add(
             asset_server
                 .load("assets/textures/move_fast.png")
                 .unwrap()
                 .into(),
-        ), // UPDATED
+        ),
         melee: materials.add(
             asset_server
                 .load("assets/textures/swords.png")
                 .unwrap()
                 .into(),
-        ), // UPDATED
+        ),
         firing: materials.add(asset_server.load("assets/textures/bow.png").unwrap().into()), // UPDATED
     });
 
@@ -95,18 +101,22 @@ fn setup(
         .spawn(UiCameraComponents::default());
 
     let unit_start_positions = vec![
-        (UnitType::SkirmishInfantry, 50.0, 0.0),
-        (UnitType::MeleeInfantry, -50.0, 0.0),
+        (UnitType::SkirmishInfantry, 1, 50.0, 0.0),
+        (UnitType::MeleeInfantry, 2, -50.0, 0.0),
     ];
 
     let unit_size = 30.0;
     let state_icon_size = 12.0;
 
-    for (ut, x, y) in unit_start_positions.into_iter() {
+    let mut all_teams = vec![];
+
+    for (ut, team, x, y) in unit_start_positions.into_iter() {
         let body = RigidBodyBuilder::new_dynamic()
             .translation(x, y)
             .can_sleep(false); // things start annoyingly asleep
         let collider = ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true);
+
+        all_teams.push(team);
 
         commands
             .spawn(SpriteComponents {
@@ -115,10 +125,11 @@ fn setup(
                 sprite: Sprite::new(Vec2::new(unit_size, unit_size)),
                 ..Default::default()
             })
-            .with(UnitComponent::default_from_type(ut))
+            .with(UnitComponent::default_from_type(ut, team))
             .with(WaypointComponent::default())
             .with(HealthComponent::default())
             .with_bundle((body, collider))
+            // ui state icon
             .with_children(|parent| {
                 parent.spawn(SpriteComponents {
                     material: selection_materials.normal.into(),
@@ -131,7 +142,23 @@ fn setup(
                     sprite: Sprite::new(Vec2::new(state_icon_size, state_icon_size)),
                     ..Default::default()
                 });
-            });
+            })
+            // healthbar
+            .with_children(|parent| {
+                parent.spawn(SpriteComponents {
+                    material: sele
+                })
+            })
+            ;
+    }
+
+    // populate teams
+    for team_pair in all_teams.into_iter().tuple_combinations::<(TeamId, TeamId)>() {
+        if team_pair.0 == team_pair.1 {
+            team_lookup.0.insert(team_pair, TeamRelation::Same);
+        } else {
+            team_lookup.0.insert(team_pair, TeamRelation::Enemy);
+        }
     }
 
     // set up cursor tracker
@@ -470,214 +497,5 @@ fn cursor_system(
 
         *state.last_pos.x_mut() = pos_wld.x();
         *state.last_pos.y_mut() = pos_wld.y();
-    }
-}
-
-pub fn is_same_team(_u1: RefMut<UnitComponent>, _u2: RefMut<UnitComponent>) -> bool {
-    false
-}
-
-/// handles events that changes the commands and state for each unit.
-/// processes the following inputs:
-/// - unit proximity interactions
-/// - TODO user commands
-fn unit_event_system(
-    mut state: Local<UnitInteractionState>,
-    events: Res<Events<UnitInteractionEvent>>,
-    units: Query<&mut UnitComponent>,
-) {
-    /// this processes interactions one unit at a time within its own scope
-    /// so we don't double-borrow the Unit Component
-    fn process_unit_disengage(
-        unit_id: Entity,
-        target_id: Entity,
-        units: &Query<&mut UnitComponent>,
-    ) {
-        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
-        if unit.guard_mode_enabled {
-            log::debug!("disengaging in melee");
-            // state goes to idle, user command gets cleared
-            unit.current_action = UnitCurrentAction::Idle;
-            unit.current_command = UnitUserCommand::None_;
-        } else {
-            // state goes to moving, command to chase, speed to fast.
-            log::debug!("pursuing unit");
-            unit.current_action = UnitCurrentAction::Moving;
-            unit.current_command = UnitUserCommand::Attack(target_id);
-            unit.is_running = true;
-        }
-    }
-
-    fn process_unit_engage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
-        log::debug!(
-            "engaging in melee between {:?} and {:?}",
-            unit_id,
-            target_id
-        );
-        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
-        unit.current_action = UnitCurrentAction::Melee(target_id);
-    }
-
-    fn process_unit_command(
-        unit_id: Entity,
-        cmd: UnitUiCommand,
-        units: &Query<&mut UnitComponent>,
-    ) {
-        use UnitUiCommand::*;
-        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
-        match cmd {
-            Attack(target, speed) => {
-                unit.current_command = UnitUserCommand::Attack(target);
-                unit.is_running = speed == UnitUiSpeedCommand::Run;
-            }
-            Move(pos, speed) => {
-                unit.current_command = UnitUserCommand::Move(pos);
-                unit.current_action = UnitCurrentAction::Moving;
-                unit.is_running = speed == UnitUiSpeedCommand::Run;
-            }
-            Stop => {
-                unit.current_command = UnitUserCommand::None_;
-            }
-            ToggleGuardMode => unit.guard_mode_enabled = !unit.guard_mode_enabled,
-            ToggleFireAtWill => unit.fire_at_will = !unit.fire_at_will,
-            ToggleSpeed => unit.is_running = !unit.is_running,
-        }
-        log::debug!("unit current command: {:?}", unit.current_command);
-    }
-
-    // process state updates for units that have new events
-    for event in state.event_reader.iter(&events) {
-        log::debug!("event: {:?}", &event);
-        match event.clone() {
-            UnitInteractionEvent::Proximity(contact) => {
-                match contact {
-                    ContactType::UnitUnitMeleeDisengage(e1, e2) => {
-                        // separate scopes so we don't double-borrow the Unit component
-                        process_unit_disengage(e1, e2, &units);
-                        process_unit_disengage(e2, e1, &units);
-                    }
-                    ContactType::UnitUnitMeleeEngage(e1, e2) => {
-                        process_unit_engage(e1, e2, &units);
-                        process_unit_engage(e2, e1, &units);
-                    }
-                    ContactType::UnitWaypointReached(e1) => {
-                        let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
-                        unit.current_command = UnitUserCommand::None_;
-                    }
-                }
-            }
-            UnitInteractionEvent::Ui(entity, cmd) => {
-                process_unit_command(entity, cmd, &units);
-            }
-        }
-    }
-}
-/// for each unit, calculates the position of its waypoint
-fn unit_waypoint_system(
-    mut unit_query: Query<(&UnitComponent, &mut WaypointComponent)>,
-    target_query: Query<&Transform>,
-) {
-    for (unit, mut waypoint) in &mut unit_query.iter() {
-        match &unit.current_command {
-            UnitUserCommand::Attack(target) => {
-                let target_translation = target_query
-                    .get::<Transform>(target.clone())
-                    .expect("Target translation")
-                    .translation();
-                *waypoint = WaypointComponent::Position(
-                    (target_translation.x(), target_translation.y()).into(),
-                );
-            }
-            UnitUserCommand::Move(wp) => {
-                // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
-                *waypoint = WaypointComponent::Position(wp.clone());
-            }
-            UnitUserCommand::None_ => {}
-        }
-    }
-}
-
-// TODO have a separate component for waypoint position for all command types
-// that is updated in a separate system, so its calculated separately from the unit movement system
-// so we don't run into unique borrow issues
-fn unit_movement_system(
-    time: Res<Time>,
-    mut bodies: ResMut<RigidBodySet>,
-    mut colliders: ResMut<ColliderSet>,
-    mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    mut unit_query: Query<(
-        Entity,
-        &mut UnitComponent,
-        &mut Transform,
-        &mut RigidBodyHandleComponent,
-        &mut ColliderHandleComponent,
-        &WaypointComponent,
-    )>,
-) {
-    for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
-        &mut unit_query.iter()
-    {
-        let translation = transform.translation_mut();
-
-        // TODO remove transform here, use rigid body pos
-        let unit_pos: XyPos = (translation.x(), translation.y()).into();
-
-        let mut body = bodies.get_mut(body_handle.handle()).expect("body");
-        let collider = colliders
-            .get_mut(collider_handle.handle())
-            .expect("collider");
-
-        // if the unit is going somewhere
-        if let UnitCurrentAction::Moving = &unit.current_action {
-            if let Some(dest) = match &unit.current_command {
-                UnitUserCommand::Attack(_) => {
-                    if let WaypointComponent::Position(xy) = waypoint {
-                        Some(xy)
-                    } else {
-                        log::error!("attack command without a waypoint!");
-                        None
-                    }
-                }
-                UnitUserCommand::Move(_) => {
-                    if let WaypointComponent::Position(xy) = waypoint {
-                        Some(xy)
-                    } else {
-                        log::error!("attack command without a waypoint!");
-                        None
-                    }
-                }
-                UnitUserCommand::None_ => None,
-            } {
-                let relative_position = dest.clone() - unit_pos;
-
-                let unit_distance = unit.current_speed() * time.delta_seconds;
-
-                // using length_squared() for totally premature optimization
-                let rel_distance_sq = relative_position.length_squared();
-
-                // if we need to keep moving
-                if unit_distance.powi(2) < rel_distance_sq {
-                    // get direction
-                    let direction = relative_position.normalize();
-
-                    // move body
-                    let pos = Isometry::translation(
-                        body.position.translation.vector.x + (direction.x() * unit_distance),
-                        body.position.translation.vector.y + (direction.y() * unit_distance),
-                    );
-
-                    body.set_position(pos);
-                    collider.set_position_debug(pos);
-                } else {
-                    // can reach destination, set position to waypoint, transition to idle
-                    let pos = Isometry::translation(dest.x(), dest.y());
-                    body.set_position(pos);
-                    collider.set_position_debug(pos);
-                    unit_events.send(UnitInteractionEvent::Proximity(
-                        ContactType::UnitWaypointReached(entity),
-                    ));
-                }
-            }
-        }
     }
 }
