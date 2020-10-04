@@ -16,16 +16,18 @@ pub struct EntityToBodyHandle(pub HashMap<Entity, RigidBodyHandle>);
 
 use crate::*;
 
+#[derive(Debug,Copy, Clone)]
 pub enum ContactType {
     UnitUnitMeleeEngage(Entity, Entity),
     UnitUnitMeleeDisengage(Entity, Entity),
+    UnitWaypointReached(Entity),
 }
 
 
 pub fn unit_proximity_interaction_system(
     bh_to_e: Res<BodyHandleToEntity>,
     events: Res<EventQueue>,
-    mut unit_proximity_events: ResMut<Events<UnitInteractionEvent>>,
+    mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     units: Query<&Unit>, 
 ) {
     // we can can ignore contact events because we are only using sensors, not
@@ -43,11 +45,11 @@ pub fn unit_proximity_interaction_system(
         // new_status is guaranteed to be != prev_status
         match prox_event.new_status {
             Proximity::Disjoint => {
-                // let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
-                // let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                // if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
-                //     contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
-                // }
+                let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
+                let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
+                if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
+                    contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
+                }
             },
             Proximity::Intersecting => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
@@ -61,9 +63,7 @@ pub fn unit_proximity_interaction_system(
     }
 
     for contact in contacts {
-        unit_proximity_events.send(UnitInteractionEvent {
-            interaction: contact,
-        });
+        unit_events.send(UnitInteractionEvent::Proximity(contact));
     }
 }
 

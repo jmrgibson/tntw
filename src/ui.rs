@@ -20,6 +20,7 @@ pub struct UiStateMaterials {
     pub moving: Handle<ColorMaterial>,
     pub moving_fast: Handle<ColorMaterial>,
     pub melee: Handle<ColorMaterial>,
+    pub firing: Handle<ColorMaterial>,
 }
 
 pub fn unit_display_system(
@@ -34,6 +35,7 @@ pub fn unit_display_system(
             UnitUiState::MovingSlow => icon_materials.moving,
             UnitUiState::MovingFast => icon_materials.moving_fast,
             UnitUiState::Melee => icon_materials.melee,
+            UnitUiState::Firing => icon_materials.firing,
             _ => icon_materials.idle,
         };
         *material = if unit.is_selected() {
@@ -50,7 +52,7 @@ impl FromResources for SelectionMaterials {
         SelectionMaterials {
             normal: materials.add(Color::rgb(0.02, 0.02, 0.02).into()),
             hovered: materials.add(Color::rgb(0.05, 0.05, 0.05).into()),
-            selected: materials.add(Color::rgb(0.1, 0.5, 0.1).into()),
+            selected: materials.add(Color::rgb(0.8, 0.8, 0.1).into()),
         }
     }
 }

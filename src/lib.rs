@@ -22,8 +22,10 @@ pub struct UnitInteractionState {
     pub event_reader: EventReader<UnitInteractionEvent>,
 }
 
-pub struct UnitInteractionEvent {
-    pub interaction: physics::ContactType,
+#[derive(Clone, Copy, Debug)]
+pub enum UnitInteractionEvent {
+    Proximity(ContactType),
+    Ui(Entity, UnitUiCommand)
 }
 
 pub struct Unit {
@@ -31,15 +33,45 @@ pub struct Unit {
     pub current_action: UnitCurrentAction,
     max_speed: f32,
     is_selected: bool,
-    is_running: bool,
+    pub unit_type: UnitType,
+    pub is_running: bool,
     /// "guard mode" determines if the current unit will persue fleeing units if they 
     /// attempt to disengage melee
-    guard_mode_enabled: bool,
+    pub guard_mode_enabled: bool,
+    /// "fire at will" determines if the unit will automatically use ranged projectiles
+    /// at any enemy unit that enters its firing range
+    pub fire_at_will: bool,
+    pub remaining_ammo: usize,
 }
 
 pub enum Waypoint {
     None,
     Position(XyPos),
+}
+
+pub enum PrimaryAttackType {
+    Melee,
+    Ranged,
+}
+
+pub enum UnitType {
+    MeleeCalvary,
+    ShockCalvary,
+    SkirmishCalvary,
+    MeleeInfantry,
+    PikeInfantry,
+    ShockInfantry,
+    SpearInfantry,
+    SkirmishInfantry,
+}
+
+impl UnitType {
+    pub fn primary_attack_type(&self) -> PrimaryAttackType {
+        match self {
+            UnitType::SkirmishInfantry | UnitType::SkirmishCalvary => PrimaryAttackType::Ranged,
+            _ => PrimaryAttackType::Melee,
+        }
+    }
 }
 
 /// Intended for UI display
@@ -61,30 +93,32 @@ pub enum UnitUserCommand {
 
 #[derive(Clone, Debug)]
 pub enum UnitCurrentAction {
-    Moving,
-    Melee,
     Idle,
+    Firing(Entity),
+    Melee(Entity),
+    Moving,
 }
 
 /// possible actions given to the unit by the user
-#[derive(Clone, Debug)]
-pub enum UnitUiCommands {
+#[derive(Clone, Copy, Debug)]
+pub enum UnitUiCommand {
     Attack(Entity, UnitUiSpeedCommand),
     Move(XyPos, UnitUiSpeedCommand),
     ToggleSpeed,
     ToggleGuardMode,
+    ToggleFireAtWill,
     Stop,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnitUiSpeedCommand {
     Run,
     Walk,
 }
 
-impl UnitUiCommands {
+impl UnitUiCommand {
     pub fn has_waypoint(&self) -> bool {
-        use UnitUiCommands::*;
+        use UnitUiCommand::*;
         match self {
             Attack(_, _) | Move(_, _) => true,
             _ => false,
@@ -94,48 +128,19 @@ impl UnitUiCommands {
 }
 
 impl Unit {
-    pub fn process_command(&mut self, cmd: UnitUiCommands) {
-        use UnitUiCommands::*;
-        match cmd {
-            Attack(target, speed) => {
-                self.current_command = UnitUserCommand::Attack(target);
-                self.is_running = speed == UnitUiSpeedCommand::Run;
-            },
-            Move(pos, speed) => {
-                self.current_command = UnitUserCommand::Move(pos);
-                self.is_running = speed == UnitUiSpeedCommand::Run;
-            },
-            Stop => {
-                self.current_command = UnitUserCommand::None_;
-            },
-            ToggleGuardMode => {
-                self.guard_mode_enabled = !self.guard_mode_enabled;
-            },
-            ToggleSpeed => {
-                self.is_running = !self.is_running;
-            },
-        }
-        log::debug!("unit current command: {:?}", self.current_command);
-    }
-
     pub fn ui_state(&self) -> UnitUiState {
-        use UnitCurrentAction::*;
         match &self.current_action {
-            Melee => UnitUiState::Melee,
-            Moving => {
+            UnitCurrentAction::Melee(_) => UnitUiState::Melee,
+            UnitCurrentAction::Moving => {
                 if self.is_running {
                     UnitUiState::MovingFast 
                 } else {
                     UnitUiState::MovingSlow
                 }
             },
-            Idle => UnitUiState::Idle,
+            UnitCurrentAction::Idle => UnitUiState::Idle,
+            UnitCurrentAction::Firing(_) => UnitUiState::Firing,
         }
-    }
-
-    /// TODO
-    pub fn is_same_team(&self, other: &Unit) -> bool {
-        false
     }
 
     pub fn select(&mut self) {
@@ -168,6 +173,26 @@ impl Unit {
             self.max_speed * WALKING_SPEED_FACTOR
         }
     }
+
+    pub fn default_from_type(unit_type: UnitType) -> Unit {
+        match unit_type {
+            UnitType::MeleeInfantry => {
+                Unit {
+                    max_speed: 50.0,
+                    unit_type,
+                    ..Unit::default()
+                }
+            },
+            UnitType::SkirmishInfantry => {
+                Unit {
+                    max_speed: 80.0,
+                    unit_type,
+                    ..Unit::default()
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
 
 impl Default for Unit {
@@ -179,6 +204,9 @@ impl Default for Unit {
             is_selected: false,
             is_running: false,
             guard_mode_enabled: false,
+            unit_type: UnitType::MeleeInfantry,
+            remaining_ammo: 10,
+            fire_at_will: true,
         }
     }
 }
