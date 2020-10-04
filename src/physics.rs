@@ -28,7 +28,7 @@ pub fn unit_proximity_interaction_system(
     bh_to_e: Res<BodyHandleToEntity>,
     events: Res<EventQueue>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    units: Query<&Unit>, 
+    units: Query<&UnitComponent>, 
 ) {
     // we can can ignore contact events because we are only using sensors, not
     // rigid contactors
@@ -47,14 +47,14 @@ pub fn unit_proximity_interaction_system(
             Proximity::Disjoint => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
+                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
                     contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
                 }
             },
             Proximity::Intersecting => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
+                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
                     contacts.push(ContactType::UnitUnitMeleeEngage(e1, e2));
                 }
             },

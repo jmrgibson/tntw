@@ -8,10 +8,13 @@ use bevy::{
 
 use crate::physics::ContactType;
 
+pub mod combat;
 pub mod physics;
 pub mod ui;
 
+
 const WALKING_SPEED_FACTOR: f32 = 0.5;
+const MAX_HP: f32 = 100.0;
 
 pub type XyPos = Vec2;
 
@@ -28,7 +31,7 @@ pub enum UnitInteractionEvent {
     Ui(Entity, UnitUiCommand)
 }
 
-pub struct Unit {
+pub struct UnitComponent {
     pub current_command: UnitUserCommand,
     pub current_action: UnitCurrentAction,
     max_speed: f32,
@@ -44,7 +47,12 @@ pub struct Unit {
     pub remaining_ammo: usize,
 }
 
-pub enum Waypoint {
+pub struct HealthComponent {
+    current_health: f32,
+    max_health: f32,
+}
+
+pub enum WaypointComponent {
     None,
     Position(XyPos),
 }
@@ -91,7 +99,7 @@ pub enum UnitUserCommand {
     None_,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum UnitCurrentAction {
     Idle,
     Firing(Entity),
@@ -127,7 +135,7 @@ impl UnitUiCommand {
 
 }
 
-impl Unit {
+impl UnitComponent {
     pub fn ui_state(&self) -> UnitUiState {
         match &self.current_action {
             UnitCurrentAction::Melee(_) => UnitUiState::Melee,
@@ -174,20 +182,20 @@ impl Unit {
         }
     }
 
-    pub fn default_from_type(unit_type: UnitType) -> Unit {
+    pub fn default_from_type(unit_type: UnitType) -> UnitComponent {
         match unit_type {
             UnitType::MeleeInfantry => {
-                Unit {
+                UnitComponent {
                     max_speed: 50.0,
                     unit_type,
-                    ..Unit::default()
+                    ..UnitComponent::default()
                 }
             },
             UnitType::SkirmishInfantry => {
-                Unit {
+                UnitComponent {
                     max_speed: 80.0,
                     unit_type,
-                    ..Unit::default()
+                    ..UnitComponent::default()
                 }
             },
             _ => unimplemented!()
@@ -195,9 +203,9 @@ impl Unit {
     }
 }
 
-impl Default for Unit {
+impl Default for UnitComponent {
     fn default() -> Self {
-        Unit {
+        UnitComponent {
             current_command: UnitUserCommand::None_,
             current_action: UnitCurrentAction::Moving,
             max_speed: 50.0,
@@ -211,8 +219,17 @@ impl Default for Unit {
     }
 }
 
-impl Default for Waypoint {
+impl Default for WaypointComponent {
     fn default() -> Self {
-        Waypoint::None
+        WaypointComponent::None
+    }
+}
+
+impl Default for HealthComponent {
+    fn default() -> Self {
+        HealthComponent {
+            max_health: MAX_HP,
+            current_health: MAX_HP,
+        }
     }
 }

@@ -16,6 +16,7 @@ use bevy_rapier2d::render::RapierRenderPlugin;
 use tntw::*;
 use tntw::ui;
 use tntw::physics::*;
+use tntw::combat::*;
 
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 const DRAG_SELECT_MIN_BOX: f32 = 25.0;
@@ -43,6 +44,7 @@ fn main() {
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
+        .add_system(unit_melee_system.system())
         .add_system(ui::unit_display_system.system())
         .add_system_to_stage(stage::POST_UPDATE, unit_proximity_interaction_system.system())
         .run();
@@ -92,8 +94,9 @@ fn setup(
                 sprite: Sprite::new(Vec2::new(unit_size, unit_size)),
                 ..Default::default()
             })
-            .with(Unit::default_from_type(ut))
-            .with(Waypoint::default())
+            .with(UnitComponent::default_from_type(ut))
+            .with(WaypointComponent::default())
+            .with(HealthComponent::default())
             .with_bundle((body, collider))
             .with_children(|parent| {
                 parent.spawn(SpriteComponents {
@@ -240,7 +243,7 @@ fn input_system(
     ev_keys: Res<Events<KeyboardInput>>,
     ev_mousebtn: Res<Events<MouseButtonInput>>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    mut query: Query<(Entity, &mut Unit, &Transform, &Sprite, &mut Waypoint)>,
+    mut query: Query<(Entity, &mut UnitComponent, &Transform, &Sprite, &mut WaypointComponent)>,
 ) {
     let mut new_commands: Vec<UnitUiCommand> = Vec::new();
 
@@ -433,7 +436,7 @@ fn cursor_system(
     }
 }
 
-pub fn is_same_team(u1: RefMut<Unit>, u2: RefMut<Unit>) -> bool {
+pub fn is_same_team(u1: RefMut<UnitComponent>, u2: RefMut<UnitComponent>) -> bool {
     false
 }
 
@@ -444,12 +447,12 @@ pub fn is_same_team(u1: RefMut<Unit>, u2: RefMut<Unit>) -> bool {
 fn unit_event_system(
     mut state: Local<UnitInteractionState>,
     events: Res<Events<UnitInteractionEvent>>,
-    units: Query<&mut Unit>,
+    units: Query<&mut UnitComponent>,
 ) {
     /// this processes interactions one unit at a time within its own scope 
     /// so we don't double-borrow the Unit Component
-    fn process_unit_disengage(unit_id: Entity, target_id: Entity, units: &Query<&mut Unit>) {
-        let mut unit = units.get_mut::<Unit>(unit_id).unwrap();
+    fn process_unit_disengage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
+        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         if unit.guard_mode_enabled {
             log::debug!("disengaging in melee");
             // state goes to idle, user command gets cleared
@@ -464,15 +467,15 @@ fn unit_event_system(
         }
     }
 
-    fn process_unit_engage(unit_id: Entity, target_id: Entity, units: &Query<&mut Unit>) {
+    fn process_unit_engage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
         log::debug!("engaging in melee between {:?} and {:?}", unit_id, target_id);
-        let mut unit = units.get_mut::<Unit>(unit_id).unwrap();
+        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         unit.current_action = UnitCurrentAction::Melee(target_id);
     }
 
-    fn process_unit_command(unit_id: Entity, cmd: UnitUiCommand, units: &Query<&mut Unit>) {
+    fn process_unit_command(unit_id: Entity, cmd: UnitUiCommand, units: &Query<&mut UnitComponent>) {
         use UnitUiCommand::*;
-        let mut unit = units.get_mut::<Unit>(unit_id).unwrap();
+        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         match cmd {
             Attack(target, speed) => {
                 unit.current_command = UnitUserCommand::Attack(target);
@@ -509,7 +512,7 @@ fn unit_event_system(
                         process_unit_engage(e2, e1, &units);
                     },
                     ContactType::UnitWaypointReached(e1) => {
-                        let mut unit = units.get_mut::<Unit>(e1).unwrap();
+                        let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
                         unit.current_command = UnitUserCommand::None_;
                     }
                 }
@@ -524,7 +527,7 @@ fn unit_event_system(
 }
 /// for each unit, calculates the position of its waypoint
 fn unit_waypoint_system(
-    mut unit_query: Query<(&Unit, &mut Waypoint)>,
+    mut unit_query: Query<(&UnitComponent, &mut WaypointComponent)>,
     target_query: Query<&Transform>,
 ) {
     for (unit, mut waypoint) in &mut unit_query.iter() {
@@ -535,11 +538,11 @@ fn unit_waypoint_system(
                     .expect("Target translation")
                     .translation();
                 *waypoint =
-                    Waypoint::Position((target_translation.x(), target_translation.y()).into());
+                    WaypointComponent::Position((target_translation.x(), target_translation.y()).into());
             }
             UnitUserCommand::Move(wp) => {
                 // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
-                *waypoint = Waypoint::Position(wp.clone());
+                *waypoint = WaypointComponent::Position(wp.clone());
             }
             UnitUserCommand::None_ => {}
         }
@@ -554,7 +557,7 @@ fn unit_movement_system(
     mut bodies: ResMut<RigidBodySet>,
     mut colliders: ResMut<ColliderSet>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
-    mut unit_query: Query<(Entity, &mut Unit, &mut Transform, &mut RigidBodyHandleComponent, &mut ColliderHandleComponent, &Waypoint)>,
+    mut unit_query: Query<(Entity, &mut UnitComponent, &mut Transform, &mut RigidBodyHandleComponent, &mut ColliderHandleComponent, &WaypointComponent)>,
 ) {
     for (entity, mut unit, mut transform, body_handle, collider_handle,  waypoint) in &mut unit_query.iter() {
         let translation = transform.translation_mut();
@@ -569,7 +572,7 @@ fn unit_movement_system(
         if let UnitCurrentAction::Moving = &unit.current_action {
             if let Some(dest) = match &unit.current_command {
                 UnitUserCommand::Attack(_) => {
-                    if let Waypoint::Position(xy) = waypoint {
+                    if let WaypointComponent::Position(xy) = waypoint {
                         Some(xy)
                     } else {
                         log::error!("attack command without a waypoint!");
@@ -577,7 +580,7 @@ fn unit_movement_system(
                     }
                 }
                 UnitUserCommand::Move(_) => {
-                    if let Waypoint::Position(xy) = waypoint {
+                    if let WaypointComponent::Position(xy) = waypoint {
                         Some(xy)
                     } else {
                         log::error!("attack command without a waypoint!");
