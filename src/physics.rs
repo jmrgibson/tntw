@@ -14,33 +14,56 @@ use std::collections::HashMap;
 pub struct BodyHandleToEntity(pub HashMap<RigidBodyHandle, Entity>);
 pub struct EntityToBodyHandle(pub HashMap<Entity, RigidBodyHandle>);
 
-use crate::DebugTimer;
+use crate::*;
+
+pub enum ContactType {
+    UnitUnitMeleeEngage(Entity, Entity),
+    UnitUnitMeleeDisengage(Entity, Entity),
+}
 
 
 pub fn unit_proximity_interaction_system(
+    bh_to_e: Res<BodyHandleToEntity>,
     events: Res<EventQueue>,
-    // unit_query: 
+    mut unit_proximity_events: ResMut<Events<UnitInteractionEvent>>,
+    units: Query<&Unit>, 
 ) {
     // we can can ignore contact events because we are only using sensors, not
     // rigid contactors
-    while let Ok(contact_event) = events.contact_events.pop() {
-        log::warn!("ASD");
-    }
+    // while let Ok(contact_event) = events.contact_events.pop() {
+    // }
     
+    // contacts stores references by entity rather than RefMut<Unit> to avoid
+    // double mutable borrows
+    let mut contacts = vec![];
+
     // prox events are triggered between sensors and colliders (sensor or not)
     while let Ok(prox_event) = events.proximity_events.pop() {  
-        log::warn!("ASDaaa");
-        // we can ignore WithinMargin because we don't need any special behaviour for that case
+        // we can ignore WithinMargin because we don't need any special behaviour for that case.
         // new_status is guaranteed to be != prev_status
         match prox_event.new_status {
             Proximity::Disjoint => {
-                log::warn!("disjoint");
+                // let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
+                // let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
+                // if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
+                //     contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
+                // }
             },
             Proximity::Intersecting => {
-                log::warn!("intersection");
+                let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
+                let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
+                if units.get::<Unit>(e1).is_ok() && units.get::<Unit>(e2).is_ok() {
+                    contacts.push(ContactType::UnitUnitMeleeEngage(e1, e2));
+                }
             },
             Proximity::WithinMargin => (),
         } 
+    }
+
+    for contact in contacts {
+        unit_proximity_events.send(UnitInteractionEvent {
+            interaction: contact,
+        });
     }
 }
 
@@ -58,31 +81,6 @@ pub fn body_to_entity_system(
     }
 }
 
-
-pub fn physics_debug_system(
-    time: Res<Time>,
-    mut debug_timer: ResMut<DebugTimer>,
-    mut bodies: ResMut<RigidBodySet>,
-    mut colliders: ResMut<ColliderSet>,
-    mut query: Query<(Entity, &RigidBodyHandleComponent)>,
-) {
-    debug_timer.0.tick(time.delta_seconds);
-    // log::debug!("asd");
-    if debug_timer.0.finished {
-        // log::debug!("zzz");
-        for (entity, body_handle) in &mut query.iter() {
-            let mut body = bodies.get_mut(body_handle.handle()).expect("body");
-            // body positions appear to be correct, and we have two colliders in existance...
-            // why u no collide?
-            log::trace!("entity {:?} at ({}, {}). sleeping: {}", entity, body.position.translation.x, body.position.translation.y, body.is_sleeping());
-        }
-        log::trace!("#colliders: {}", colliders.len());
-        log::trace!("#bodies: {}", bodies.len());
-        for (idx, collider) in colliders.iter() {
-            log::trace!("collider {:?} at ({}, {})", idx, collider.position().translation.x, collider.position().translation.y);
-        }
-    }
-}
 
 /// Detects when a RigidBodyHandle is removed from an entity, as it despawns
 /// And inform rapier about the removal
@@ -110,5 +108,26 @@ pub fn remove_rigid_body_system(
         );
         bh_to_e.0.remove(handle);
         e_to_bh.0.remove(entity);
+    }
+}
+
+pub fn physics_debug_system(
+    time: Res<Time>,
+    mut debug_timer: ResMut<DebugTimer>,
+    mut bodies: ResMut<RigidBodySet>,
+    colliders: ResMut<ColliderSet>,
+    mut query: Query<(Entity, &RigidBodyHandleComponent)>,
+) {
+    debug_timer.0.tick(time.delta_seconds);
+    if debug_timer.0.finished {
+        for (entity, body_handle) in &mut query.iter() {
+            let body = bodies.get_mut(body_handle.handle()).expect("body");
+            log::trace!("entity {:?} at ({}, {}). sleeping: {}", entity, body.position.translation.x, body.position.translation.y, body.is_sleeping());
+        }
+        log::trace!("#colliders: {}", colliders.len());
+        log::trace!("#bodies: {}", bodies.len());
+        for (idx, collider) in colliders.iter() {
+            log::trace!("collider {:?} at ({}, {})", idx, collider.position().translation.x, collider.position().translation.y);
+        }
     }
 }

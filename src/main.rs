@@ -13,7 +13,7 @@ use bevy_rapier2d::rapier::math::{Isometry};
 use bevy_rapier2d::render::RapierRenderPlugin;
 
 
-use tntw::{Unit, UnitCommands, UnitCurrentCommand, UnitState, Waypoint, XyPos, DebugTimer};
+use tntw::*;
 use tntw::ui;
 use tntw::physics::*;
 
@@ -32,13 +32,14 @@ fn main() {
         .add_resource(DebugTimer(Timer::from_seconds(1.0, true)))
         .init_resource::<InputState>()
         .init_resource::<ui::SelectionMaterials>()
+        .add_event::<UnitInteractionEvent>()
         .add_startup_system(setup.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_system(cursor_system.system())
         .add_system(input_system.system())
         .add_system(unit_waypoint_system.system())
+        .add_system(unit_state_system.system())
         .add_system(unit_movement_system.system())
-        // .add_system(unit_proximity_interaction_system.system())
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
@@ -58,6 +59,7 @@ fn setup(
         idle: materials.add(asset_server.load("assets/textures/idle.png").unwrap().into()),  // UPDATED
         moving: materials.add(asset_server.load("assets/textures/move.png").unwrap().into()),  // UPDATED
         moving_fast: materials.add(asset_server.load("assets/textures/move_fast.png").unwrap().into()), // UPDATED
+        melee: materials.add(asset_server.load("assets/textures/swords.png").unwrap().into()), // UPDATED
     });
 
     // Add the game's entities to our world
@@ -239,7 +241,7 @@ fn input_system(
     // ev_scroll: Res<Events<MouseWheel>>,
     mut query: Query<(Entity, &mut Unit, &Transform, &Sprite, &mut Waypoint)>,
 ) {
-    let mut new_commands: Vec<UnitCommands> = Vec::new();
+    let mut new_commands: Vec<UnitUiCommands> = Vec::new();
 
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
@@ -247,8 +249,9 @@ fn input_system(
             // on press
             if let Some(key) = ev.key_code {
                 match key {
-                    KeyCode::S => new_commands.push(UnitCommands::Stop),
-                    KeyCode::R => new_commands.push(UnitCommands::ToggleSpeed),
+                    KeyCode::S => new_commands.push(UnitUiCommands::Stop),
+                    KeyCode::R => new_commands.push(UnitUiCommands::ToggleSpeed),
+                    KeyCode::G => new_commands.push(UnitUiCommands::ToggleGuardMode),
                     KeyCode::LShift => state.is_toggle_select_on = true,
                     KeyCode::LControl => state.is_multi_select_on = true,
                     _ => (),
@@ -365,14 +368,16 @@ fn input_system(
             }
         },
         Some(MouseCommand::Action(pos)) => {
-            let mut cmd = if let Some(target) = selection_targets.into_iter().next() {
-                UnitCommands::AttackSlow(target)
+            let speed = if is_double_click {
+                UnitUiSpeedCommand::Run
             } else {
-                UnitCommands::MoveSlow(pos.clone())
+                UnitUiSpeedCommand::Walk
             };
-            if is_double_click {
-                cmd = cmd.to_fast();
-            }
+            let mut cmd = if let Some(target) = selection_targets.into_iter().next() {
+                UnitUiCommands::Attack(target, speed)
+            } else {
+                UnitUiCommands::Move(pos.clone(), speed)
+            };
             new_commands.push(cmd);
         },
         None => (),
@@ -426,14 +431,62 @@ fn cursor_system(
     }
 }
 
-// for each unit, calculates the position of its next waypoint
+pub fn is_same_team(u1: RefMut<Unit>, u2: RefMut<Unit>) -> bool {
+    false
+}
+
+/// main state machine for each unit. 
+/// processes the following inputs:
+/// - unit proximity interactions
+fn unit_state_system(
+    mut state: Local<UnitInteractionState>,
+    events: Res<Events<UnitInteractionEvent>>,
+    mut units: Query<&mut Unit>,
+) {
+    // process state updates for units that have new events  
+    for event in state.event_reader.iter(&events) {
+        log::debug!("event!");
+        match event.interaction {
+            ContactType::UnitUnitMeleeDisengage(e1, e2) => {
+                // let mut u1 = units.get_mut::<Unit>(e1).unwrap();
+                // let mut u2 = units.get_mut::<Unit>(e2).unwrap();
+                // if !is_same_team(u1, u2) {
+                    // log::debug!("disengaging in melee");
+                    // // TODO should resume past user command somehow
+                    // if u1.guard_mode_enabled {
+                        //     u1.current_action = UnitCurrentAction::Idle;
+                        //     u1.current_command = UnitUserCommand::None_;
+                        // } else {
+                            //     log::debug!("engaging chasing unit");
+                            //     u1.current_action = UnitCurrentAction::Moving;
+                            // }
+                // } 
+            },
+            ContactType::UnitUnitMeleeEngage(e1, e2) => {
+                log::debug!("engaging in melee between {:?} and {:?}", e1, e2);
+                // separate scopes so we don't double-borrow the Unit component
+                {
+                    let mut u1 = units.get_mut::<Unit>(e1).unwrap();
+                    u1.current_action = UnitCurrentAction::Melee;
+                }
+                {
+                    let mut u2 = units.get_mut::<Unit>(e2).unwrap();
+                    u2.current_action = UnitCurrentAction::Melee;
+                }
+            },
+        }
+    }
+
+
+}
+/// for each unit, calculates the position of its waypoint
 fn unit_waypoint_system(
     mut unit_query: Query<(&Unit, &mut Waypoint)>,
     target_query: Query<&Transform>,
 ) {
     for (unit, mut waypoint) in &mut unit_query.iter() {
         match &unit.current_command {
-            UnitCurrentCommand::AttackSlow(target) | UnitCurrentCommand::AttackFast(target) => {
+            UnitUserCommand::Attack(target) => {
                 let target_translation = target_query
                     .get::<Transform>(target.clone())
                     .expect("Target translation")
@@ -441,16 +494,14 @@ fn unit_waypoint_system(
                 *waypoint =
                     Waypoint::Position((target_translation.x(), target_translation.y()).into());
             }
-            UnitCurrentCommand::MoveSlow(wp) | UnitCurrentCommand::MoveFast(wp) => {
+            UnitUserCommand::Move(wp) => {
                 // TODO this is unnessecary, but maybe its where its where we put in some pathfinding to determine the next step?
                 *waypoint = Waypoint::Position(wp.clone());
             }
-            UnitCurrentCommand::None_ => {}
+            UnitUserCommand::None_ => {}
         }
     }
 }
-
-
 
 // TODO have a separate component for waypoint position for all command types
 // that is updated in a separate system, so its calculated separately from the unit movement system
@@ -471,55 +522,57 @@ fn unit_movement_system(
         let mut collider = colliders.get_mut(collider_handle.handle()).expect("collider");
 
         // if the unit is going somewhere
-        if let Some(dest) = match &unit.current_command {
-            UnitCurrentCommand::AttackSlow(_) | UnitCurrentCommand::AttackFast(_) => {
-                if let Waypoint::Position(xy) = waypoint {
-                    Some(xy)
-                } else {
-                    log::error!("attack command without a waypoint!");
-                    None
+        if let UnitCurrentAction::Moving = &unit.current_action {
+            if let Some(dest) = match &unit.current_command {
+                UnitUserCommand::Attack(_) => {
+                    if let Waypoint::Position(xy) = waypoint {
+                        Some(xy)
+                    } else {
+                        log::error!("attack command without a waypoint!");
+                        None
+                    }
                 }
-            }
-            UnitCurrentCommand::MoveSlow(_) | UnitCurrentCommand::MoveFast(_) => {
-                if let Waypoint::Position(xy) = waypoint {
-                    Some(xy)
-                } else {
-                    log::error!("attack command without a waypoint!");
-                    None
+                UnitUserCommand::Move(_) => {
+                    if let Waypoint::Position(xy) = waypoint {
+                        Some(xy)
+                    } else {
+                        log::error!("attack command without a waypoint!");
+                        None
+                    }
                 }
-            }
-            UnitCurrentCommand::None_ => None,
-        } {
-            let relative_position = dest.clone() - unit_pos;
+                UnitUserCommand::None_ => None,
+            } {
+                let relative_position = dest.clone() - unit_pos;
 
-            let unit_distance = unit.current_speed() * time.delta_seconds;
+                let unit_distance = unit.current_speed() * time.delta_seconds;
 
-            // using length_squared() for totally premature optimization
-            let rel_distance_sq = relative_position.length_squared();
+                // using length_squared() for totally premature optimization
+                let rel_distance_sq = relative_position.length_squared();
 
-            // if we need to keep moving
-            if unit_distance.powi(2) < rel_distance_sq {
-                // get direction
-                let direction = relative_position.normalize();
-                
-                // move body
-                let pos = Isometry::translation(
-                    body.position.translation.vector.x + (direction.x() * unit_distance),
-                    body.position.translation.vector.y + (direction.y() * unit_distance),
-                );
+                // if we need to keep moving
+                if unit_distance.powi(2) < rel_distance_sq {
+                    // get direction
+                    let direction = relative_position.normalize();
+                    
+                    // move body
+                    let pos = Isometry::translation(
+                        body.position.translation.vector.x + (direction.x() * unit_distance),
+                        body.position.translation.vector.y + (direction.y() * unit_distance),
+                    );
 
-                body.set_position(pos);
-                collider.set_position_debug(pos);
-            } else {
-                // can reach destination, set position to waypoint, transition to idle
-                let pos = Isometry::translation(
-                    dest.x(),
-                    dest.y(),
-                );
-                body.set_position(pos);
-                collider.set_position_debug(pos);
-                log::debug!("reached destination");
-                unit.process_command(UnitCommands::Stop);
+                    body.set_position(pos);
+                    collider.set_position_debug(pos);
+                } else {
+                    // can reach destination, set position to waypoint, transition to idle
+                    let pos = Isometry::translation(
+                        dest.x(),
+                        dest.y(),
+                    );
+                    body.set_position(pos);
+                    collider.set_position_debug(pos);
+                    log::debug!("reached destination");
+                    unit.process_command(UnitUiCommands::Stop);
+                }
             }
         }
     }

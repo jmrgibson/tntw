@@ -26,6 +26,7 @@ an AI opponent.
 - proper aabb selection boxes?
 - actual textures for units
 - unit collision detection
+- teams
 - box for drag-select
 - combat?
 - unit acceleration and rotation
@@ -41,3 +42,8 @@ learning courses, and had some toy algorithms running, but applying them to a ga
 like a bit of a daunting task, so I decided to build my own simulator instead (because thats totally easier, right?).
 
 I picked bevy because I use Rust at work, and also the hackernews hype train.
+
+
+## Specs
+
+- units 

@@ -4,7 +4,7 @@ use bevy::{prelude::*, render::pass::ClearColor};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
 
-use crate::{Unit, UnitState};
+use crate::{Unit, UnitUiState};
 
 
 pub const ICON_SCALE: f32 = 1.2;
@@ -19,6 +19,7 @@ pub struct UiStateMaterials {
     pub idle: Handle<ColorMaterial>,
     pub moving: Handle<ColorMaterial>,
     pub moving_fast: Handle<ColorMaterial>,
+    pub melee: Handle<ColorMaterial>,
 }
 
 pub fn unit_display_system(
@@ -29,9 +30,10 @@ pub fn unit_display_system(
 ) {
     for (unit, mut material, children) in &mut unit_query.iter() {
         let mut state_icon = icon_query.get_mut::<Handle<ColorMaterial>>(children[0]).unwrap();
-        *state_icon = match unit.state() {
-            UnitState::MovingSlow => icon_materials.moving,
-            UnitState::MovingFast => icon_materials.moving_fast,
+        *state_icon = match unit.ui_state() {
+            UnitUiState::MovingSlow => icon_materials.moving,
+            UnitUiState::MovingFast => icon_materials.moving_fast,
+            UnitUiState::Melee => icon_materials.melee,
             _ => icon_materials.idle,
         };
         *material = if unit.is_selected() {
