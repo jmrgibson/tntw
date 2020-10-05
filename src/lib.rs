@@ -1,4 +1,4 @@
-#[deny(unreachable_patterns)]
+#![deny(unreachable_patterns)]
 use bevy::{
     prelude::*,
 };
@@ -30,12 +30,32 @@ pub enum UnitInteractionEvent {
     Ui(Entity, UnitUiCommand),
 }
 
+pub enum MissileType {
+    Bow,
+    Javelin,
+    Sling,
+}
+
+pub struct MissileStats {
+    pub max_ammunition: usize,
+    pub current_ammunition: usize,
+    pub range: f32,
+    pub type_: MissileType,
+}
+
+pub enum MissileWeapon {
+    Primary(MissileStats),
+    Secondary(MissileStats),
+    None,
+}
+
 pub struct UnitComponent {
     pub current_command: UnitUserCommand,
-    pub current_action: UnitCurrentAction,
+    pub state: UnitState,
     max_speed: f32,
     is_selected: bool,
     pub team: TeamId,
+    pub missile_weapon: MissileWeapon,
     pub unit_type: UnitType,
     pub is_running: bool,
     /// "guard mode" determines if the current unit will persue fleeing units if they
@@ -57,6 +77,7 @@ pub enum WaypointComponent {
     Position(XyPos),
 }
 
+#[derive(PartialEq)]
 pub enum PrimaryAttackType {
     Melee,
     Ranged,
@@ -65,18 +86,18 @@ pub enum PrimaryAttackType {
 pub enum UnitType {
     MeleeCalvary,
     ShockCalvary,
-    SkirmishCalvary,
+    MissileCalvary,
     MeleeInfantry,
     PikeInfantry,
     ShockInfantry,
     SpearInfantry,
-    SkirmishInfantry,
+    MissileInfantry,
 }
 
 impl UnitType {
     pub fn primary_attack_type(&self) -> PrimaryAttackType {
         match self {
-            UnitType::SkirmishInfantry | UnitType::SkirmishCalvary => PrimaryAttackType::Ranged,
+            UnitType::MissileInfantry | UnitType::MissileCalvary => PrimaryAttackType::Ranged,
             _ => PrimaryAttackType::Melee,
         }
     }
@@ -94,15 +115,19 @@ pub enum UnitUiState {
 /// the current command given to this unit by the user.
 #[derive(Clone, Debug)]
 pub enum UnitUserCommand {
-    Attack(Entity),
+    AttackMelee(Entity),
+    AttackMissile(Entity),
     Move(XyPos),
     None_,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum UnitCurrentAction {
+pub enum UnitState {
     Idle,
+    // I should take these entites out and store them separately?!?
     Firing(Entity),
+    /// Damnit horse archers complicating things
+    FiringAndMoving(Entity),
     Melee(Entity),
     Moving,
 }
@@ -126,17 +151,17 @@ pub enum UnitUiSpeedCommand {
 
 impl UnitComponent {
     pub fn ui_state(&self) -> UnitUiState {
-        match &self.current_action {
-            UnitCurrentAction::Melee(_) => UnitUiState::Melee,
-            UnitCurrentAction::Moving => {
+        match &self.state {
+            UnitState::Melee(_) => UnitUiState::Melee,
+            UnitState::Moving => {
                 if self.is_running {
                     UnitUiState::MovingFast
                 } else {
                     UnitUiState::MovingSlow
                 }
             }
-            UnitCurrentAction::Idle => UnitUiState::Idle,
-            UnitCurrentAction::Firing(_) => UnitUiState::Firing,
+            UnitState::Idle => UnitUiState::Idle,
+            UnitState::Firing(_) | UnitState::FiringAndMoving(_) => UnitUiState::Firing,
         }
     }
 
@@ -171,6 +196,14 @@ impl UnitComponent {
         }
     }
 
+    pub fn is_missile_attack_available(&self) -> bool {
+        if let MissileWeapon::Primary(stats) | MissileWeapon::Secondary(stats) = &self.missile_weapon {
+            stats.current_ammunition > 0
+        } else {
+            false
+        }
+    }   
+
     pub fn default_from_type(unit_type: UnitType, team: TeamId) -> UnitComponent {
         match unit_type {
             UnitType::MeleeInfantry => UnitComponent {
@@ -179,8 +212,14 @@ impl UnitComponent {
                 team,
                 ..UnitComponent::default()
             },
-            UnitType::SkirmishInfantry => UnitComponent {
+            UnitType::MissileInfantry => UnitComponent {
                 max_speed: 80.0,
+                missile_weapon: MissileWeapon::Primary(MissileStats{
+                    max_ammunition: 500,
+                    current_ammunition: 500,
+                    range: 500.0,
+                    type_: MissileType::Bow,
+                }),
                 unit_type,
                 team,
                 ..UnitComponent::default()
@@ -194,7 +233,7 @@ impl Default for UnitComponent {
     fn default() -> Self {
         UnitComponent {
             current_command: UnitUserCommand::None_,
-            current_action: UnitCurrentAction::Moving,
+            state: UnitState::Moving,
             max_speed: 50.0,
             is_selected: false,
             is_running: false,
@@ -203,6 +242,7 @@ impl Default for UnitComponent {
             remaining_ammo: 10,
             fire_at_will: true,
             team: 0,
+            missile_weapon: MissileWeapon::None,
         }
     }
 }

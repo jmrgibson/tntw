@@ -38,8 +38,8 @@ pub fn unit_display_system(
         &Children,
     )>,
     icon_query: Query<&mut Handle<ColorMaterial>>,
-    sprite_query: Query<(&mut Sprite)>,
-    transform_query: Query<(&mut Transform)>,
+    sprite_query: Query<&mut Sprite>,
+    transform_query: Query<&mut Transform>,
 ) {
     for (unit, health, mut material, children) in &mut unit_query.iter() {
         // state icon

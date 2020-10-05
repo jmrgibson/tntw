@@ -52,6 +52,7 @@ fn main() {
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
         .add_system(unit_melee_system.system())
+        .add_system(unit_missile_system.system())
         .add_system(ui::unit_display_system.system())
         .add_system_to_stage(
             stage::POST_UPDATE,
@@ -103,7 +104,7 @@ fn setup(
         .spawn(UiCameraComponents::default());
 
     let unit_start_positions = vec![
-        (UnitType::SkirmishInfantry, 1, 50.0, 0.0),
+        (UnitType::MissileInfantry, 1, 50.0, 0.0),
         (UnitType::MeleeInfantry, 2, -50.0, 0.0),
     ];
 
@@ -113,10 +114,23 @@ fn setup(
     let mut all_teams = vec![];
 
     for (ut, team, x, y) in unit_start_positions.into_iter() {
+        let unit = UnitComponent::default_from_type(ut, team);
+        
         let body = RigidBodyBuilder::new_dynamic()
             .translation(x, y)
             .can_sleep(false); // things start annoyingly asleep
-        let collider = ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true);
+        
+        // TODO add more colliders when bevy_rapier supports it.
+        // for now, missile units cant engage in melee
+        let collider = if let PrimaryAttackType::Melee = ut.primary_attack_type() {
+            ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true);
+        } else {
+            if let MissileWeapon::Primary(stats) = unit.missile_weapon {
+                ColliderBuilder::ball(stats.range).sensor(true)
+            } else {
+                unimplemented!();
+            }
+        };
 
         all_teams.push(team);
 
@@ -127,7 +141,7 @@ fn setup(
                 sprite: Sprite::new(Vec2::new(unit_size, unit_size)),
                 ..Default::default()
             })
-            .with(UnitComponent::default_from_type(ut, team))
+            .with(unit)
             .with(WaypointComponent::default())
             .with(HealthComponent::default())
             .with_bundle((body, collider))
@@ -181,6 +195,7 @@ fn setup(
         if team_pair.0 == team_pair.1 {
             team_lookup.0.insert(team_pair, TeamRelation::Same);
         } else {
+            // TODO support allies
             team_lookup.0.insert(team_pair, TeamRelation::Enemy);
         }
     }

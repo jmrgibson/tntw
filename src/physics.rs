@@ -12,8 +12,15 @@ use bevy_rapier2d::physics::EventQueue;
 use bevy_rapier2d::rapier::geometry::Proximity;
 
 use std::collections::HashMap;
+
+pub enum ColliderType {
+    Melee,
+    FiringRange,
+}
+
 pub struct BodyHandleToEntity(pub HashMap<RigidBodyHandle, Entity>);
 pub struct EntityToBodyHandle(pub HashMap<Entity, RigidBodyHandle>);
+pub struct EntityToColliderType(pub HashMap<Entity, ColliderType>);
 
 use crate::*;
 
@@ -21,17 +28,27 @@ use crate::*;
 pub enum ContactType {
     UnitUnitMeleeEngage(Entity, Entity),
     UnitUnitMeleeDisengage(Entity, Entity),
+    UnitFiringRangeEnter{
+        range_of: Entity,
+        target: Entity,
+    },
+    UnitFiringRangeExit{
+        range_of: Entity,
+        target: Entity,
+    },
     UnitWaypointReached(Entity),
 }
 
 pub fn unit_proximity_interaction_system(
     bh_to_e: Res<BodyHandleToEntity>,
+    e_to_ct: Res<EntityToColliderType>,
     events: Res<EventQueue>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     units: Query<&UnitComponent>,
 ) {
+    use ColliderType::*;
     // we can can ignore contact events because we are only using sensors, not
-    // rigid-body contactors
+    // rigid-body contactors. Sensors only spawn proximity events.
     // while let Ok(contact_event) = events.contact_events.pop() {
     // }
 
@@ -46,20 +63,55 @@ pub fn unit_proximity_interaction_system(
             Proximity::Disjoint => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok()
-                {
-                    contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
+
+                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
+                    match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
+                        (Melee, Melee) => {
+                            contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
+                        },
+                        (Melee, FiringRange) => {
+                            contacts.push(ContactType::UnitFiringRangeExit {
+                                range_of: e2,
+                                target: e1,
+                            });
+                        },
+                        (FiringRange, Melee) => {
+                            contacts.push(ContactType::UnitFiringRangeExit {
+                                range_of: e1,
+                                target: e2,
+                            });
+
+                        },
+                        (FiringRange, FiringRange) => (),
+                    }
                 }
             }
             Proximity::Intersecting => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok()
-                {
-                    contacts.push(ContactType::UnitUnitMeleeEngage(e1, e2));
+                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
+                    match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
+                        (Melee, Melee) => {
+                            contacts.push(ContactType::UnitUnitMeleeEngage(e1, e2));
+                        },
+                        (Melee, FiringRange) => {
+                            contacts.push(ContactType::UnitFiringRangeEnter {
+                                range_of: e2,
+                                target: e1,
+                            });
+                        },
+                        (FiringRange, Melee) => {
+                            contacts.push(ContactType::UnitFiringRangeEnter {
+                                range_of: e1,
+                                target: e2,
+                            });
+
+                        },
+                        (FiringRange, FiringRange) => (),
+                    }
                 }
             }
-            // we can ignore WithinMargin because we don't need any special behaviour for that case.
+            // ignore WithinMargin because we don't need any special behaviour for that case.
             Proximity::WithinMargin => (),
         }
     }
@@ -74,12 +126,20 @@ pub fn unit_proximity_interaction_system(
 pub fn body_to_entity_system(
     mut bh_to_e: ResMut<BodyHandleToEntity>,
     mut e_to_bh: ResMut<EntityToBodyHandle>,
+    mut e_to_ct: ResMut<EntityToColliderType>,
     mut added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
+    units: Query<&UnitComponent>,
 ) {
     for (entity, body_handle) in &mut added.iter() {
         log::debug!("new rigid body");
         bh_to_e.0.insert(body_handle.handle(), entity);
         e_to_bh.0.insert(entity, body_handle.handle());
+        let ct = if let MissileWeapon::None = units.get::<UnitComponent>(entity).unwrap().missile_weapon {
+            ColliderType::Melee
+        } else {
+            ColliderType::FiringRange
+        };
+        e_to_ct.0.insert(entity, ct);
     }
 }
 
