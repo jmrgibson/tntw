@@ -26,8 +26,8 @@ use crate::*;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ContactType {
-    UnitUnitMeleeEngage(Entity, Entity),
-    UnitUnitMeleeDisengage(Entity, Entity),
+    UnitUnitMeleeEnter(Entity, Entity),
+    UnitUnitMeleeExit(Entity, Entity),
     UnitFiringRangeEnter{
         range_of: Entity,
         target: Entity,
@@ -67,7 +67,7 @@ pub fn unit_proximity_interaction_system(
                 if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
-                            contacts.push(ContactType::UnitUnitMeleeDisengage(e1, e2));
+                            contacts.push(ContactType::UnitUnitMeleeExit(e1, e2));
                         },
                         (Melee, FiringRange) => {
                             contacts.push(ContactType::UnitFiringRangeExit {
@@ -92,7 +92,7 @@ pub fn unit_proximity_interaction_system(
                 if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok() {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
-                            contacts.push(ContactType::UnitUnitMeleeEngage(e1, e2));
+                            contacts.push(ContactType::UnitUnitMeleeEnter(e1, e2));
                         },
                         (Melee, FiringRange) => {
                             contacts.push(ContactType::UnitFiringRangeEnter {
@@ -200,6 +200,26 @@ pub fn physics_debug_system(
                 collider.position().translation.x,
                 collider.position().translation.y
             );
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EnterOrExit {
+    Enter,
+    Exit,
+}   
+
+impl ContactType {
+    pub fn enter_or_exit(&self) -> EnterOrExit {
+        match self {
+            ContactType::UnitFiringRangeEnter{..} | ContactType::UnitUnitMeleeEnter(..) => {
+                EnterOrExit::Enter
+            } 
+            ContactType::UnitFiringRangeExit{..} | ContactType::UnitUnitMeleeExit(..) => {
+                EnterOrExit::Exit
+            } 
+            _ => unimplemented!(),
         }
     }
 }

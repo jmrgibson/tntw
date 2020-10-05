@@ -17,6 +17,14 @@ use crate::teams::*;
 use crate::physics::*;
 use crate::*;
 
+/// stores units that are within attack (melee or missle) range of the
+/// associated unit, used to determining unit behaviour.
+#[derive(Debug, Default)]
+pub struct NearbyUnitsComponent {
+    melee_range: Vec<Entity>,
+    missle_range: Vec<Entity>,
+}
+
 /// handles events that changes the commands and state for each unit.
 /// processes the following inputs:
 /// - unit proximity interactions
@@ -25,37 +33,29 @@ pub fn unit_event_system(
     mut state: Local<UnitInteractionState>,
     events: Res<Events<UnitInteractionEvent>>,
     units: Query<&mut UnitComponent>,
+    nearbys: Query<&mut NearbyUnitsComponent>,
 ) {
     /// this processes interactions one unit at a time within its own scope
     /// so we don't double-borrow the Unit Component
-    fn process_unit_disengage(
+    fn process_unit_proximity(
         unit_id: Entity,
         target_id: Entity,
-        units: &Query<&mut UnitComponent>,
+        nearbys: &Query<&mut NearbyUnitsComponent>,
+        e_or_e: EnterOrExit,
+        range_type: AttackType,
     ) {
-        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
-        if unit.guard_mode_enabled {
-            log::debug!("disengaging in melee");
-            // state goes to idle, user command gets cleared
-            unit.state = UnitState::Idle;
-            unit.current_command = UnitUserCommand::None_;
+        let mut nbs = nearbys.get_mut::<NearbyUnitsComponent>(unit_id).unwrap();
+        let vec = if range_type == AttackType::Melee {
+            &mut nbs.melee_range
         } else {
-            // state goes to moving, command to chase, speed to fast.
-            log::debug!("pursuing unit");
-            unit.state = UnitState::Moving;
-            unit.current_command = UnitUserCommand::AttackMelee(target_id);
-            unit.is_running = true;
-        }
-    }
+            &mut nbs.missle_range
+        };
 
-    fn process_unit_engage(unit_id: Entity, target_id: Entity, units: &Query<&mut UnitComponent>) {
-        log::debug!(
-            "engaging in melee between {:?} and {:?}",
-            unit_id,
-            target_id
-        );
-        let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
-        unit.state = UnitState::Melee(target_id);
+        if e_or_e == EnterOrExit::Enter {
+            vec.push(target_id);
+        } else {
+            vec.retain(|e| e != &target_id);
+        }
     }
 
     fn process_unit_command(
@@ -67,12 +67,15 @@ pub fn unit_event_system(
         let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
         match cmd {
             Attack(target, speed) => {
-                unit.current_command = UnitUserCommand::AttackMelee(target);
                 unit.is_running = speed == UnitUiSpeedCommand::Run;
+                unit.current_command = if let AttackType::Melee = unit.primary_attack_type() {
+                    UnitUserCommand::AttackMelee(target)
+                } else {
+                    UnitUserCommand::AttackMissile(target)
+                }
             }
             Move(pos, speed) => {
                 unit.current_command = UnitUserCommand::Move(pos);
-                unit.state = UnitState::Moving;
                 unit.is_running = speed == UnitUiSpeedCommand::Run;
             }
             Stop => {
@@ -85,91 +88,31 @@ pub fn unit_event_system(
         log::debug!("unit current command: {:?}", unit.current_command);
     }
     
-    /// Expected behaviour:
-    /// units in melee get stuck in melee
-    /// TODO this will retarget every time a new thing 
-    /// comes into range, which is probably not what we want.
-    /// TODO this will not re-target when multiple units enter at the same time.
-    fn process_unit_enter_range(
-        target: Entity,
-        range_of: Entity,
-        units: &Query<&mut UnitComponent>,
-    ) {
-        let mut unit = units.get_mut::<UnitComponent>(range_of).unwrap();
-        
-        if let UnitState::Melee(_) = unit.state {
-            return;
-        }
-        
-        let start_firing = match unit.current_command {
-            UnitUserCommand::AttackMelee(cmd_target) => {
-                cmd_target == target
-            }
-            UnitUserCommand::None_ => {
-                unit.fire_at_will
-            }
-            _ => false,
-        };
-
-        if start_firing {
-            unit.state = UnitState::Firing(target);
-        }
-    }
-
-    /// expected behaviour:
-    /// only chase guardmode disabled
-    fn process_unit_exit_range(
-        target: Entity,
-        range_of: Entity,
-        units: &Query<&mut UnitComponent>,
-    ) {
-        // let mut unit = units.get_mut::<UnitComponent>(range_of).unwrap();
-
-        // match unit.state {
-        //     UnitState::Melee(_) => {
-        //         return;
-        //     }
-        //     UnitCurrentAction
-        // }
-
-        // let chase = match unit.current_command {
-        //     UnitUserCommand::AttackMelee(cmd_target) => {
-        //         if target == cmd_target {
-        //             !unit.guard_mode_enabled
-        //         } else {
-        //             false
-        //         }
-        //     }
-        //     _ => false,
-        // };
-    }
-    
     // process state updates for units that have new events
     for event in state.event_reader.iter(&events) {
         log::debug!("event: {:?}", &event);
         match event.clone() {
             UnitInteractionEvent::Proximity(contact) => {
                 match contact {
-                    ContactType::UnitUnitMeleeDisengage(e1, e2) => {
+                    ContactType::UnitFiringRangeEnter{range_of, target} => {
+                        process_unit_proximity(range_of, target, &nearbys, contact.enter_or_exit(), AttackType::Ranged);
+                    }   
+                    ContactType::UnitFiringRangeExit{range_of, target } => {
+                        process_unit_proximity(range_of, target, &nearbys, contact.enter_or_exit(), AttackType::Ranged);
+                    }   
+                    ContactType::UnitUnitMeleeExit(e1, e2) => {
                         // separate scopes so we don't double-borrow the Unit component
-                        process_unit_disengage(e1, e2, &units);
-                        process_unit_disengage(e2, e1, &units);
+                        process_unit_proximity(e1, e2, &nearbys, contact.enter_or_exit(), AttackType::Melee);
+                        process_unit_proximity(e2, e1, &nearbys, contact.enter_or_exit(), AttackType::Melee);
                     }
-                    ContactType::UnitUnitMeleeEngage(e1, e2) => {
-                        process_unit_engage(e1, e2, &units);
-                        process_unit_engage(e2, e1, &units);
+                    ContactType::UnitUnitMeleeEnter(e1, e2) => {
+                        process_unit_proximity(e1, e2, &nearbys, contact.enter_or_exit(), AttackType::Melee);
+                        process_unit_proximity(e2, e1, &nearbys, contact.enter_or_exit(), AttackType::Melee);
                     }
                     ContactType::UnitWaypointReached(e1) => {
                         let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
                         unit.current_command = UnitUserCommand::None_;
                     }
-                    ContactType::UnitFiringRangeEnter{target, range_of} => {
-                        process_unit_enter_range(target, range_of, &units);
-
-                    }   
-                    ContactType::UnitFiringRangeExit{target, range_of} => {
-                        process_unit_exit_range(target, range_of, &units)
-                    }   
                 }             
             }
             UnitInteractionEvent::Ui(entity, cmd) => {
@@ -203,17 +146,16 @@ pub fn calculate_next_unit_state(
     guard_mode_enabled: bool,
     fire_at_will_enabled: bool,
     missile_attack_available: bool,
+    can_fire_while_moving: bool,
 ) -> UnitState {
     // should be current active target
     let TODO = enemies_within_melee_range[0];
     let target_is_dead = false; // TODO
 
     let engaged_in_melee = !enemies_within_melee_range.is_empty();
-    let targets_in_range = !enemies_within_missile_range.is_empty();
 
     match current_command {
         UnitUserCommand::AttackMelee(cmd_target) => {
-
             if enemies_within_melee_range.contains(&cmd_target) {
                 // priority target should be the user command 
                 UnitState::Melee(cmd_target.clone())
@@ -226,6 +168,7 @@ pub fn calculate_next_unit_state(
                 if guard_mode_enabled {
                     UnitState::Moving
                 } else {
+                    // TODO clear command
                     UnitState::Idle
                 }
             }
@@ -233,6 +176,8 @@ pub fn calculate_next_unit_state(
         UnitUserCommand::AttackMissile(cmd_target) => {
             if engaged_in_melee {
                 UnitState::Melee(TODO)
+            } else if !missile_attack_available {
+                UnitState::Idle
             } else if enemies_within_missile_range.contains(&cmd_target) {
                 UnitState::Firing(cmd_target.clone())
             } else {  // target is not within missle range
@@ -252,14 +197,27 @@ pub fn calculate_next_unit_state(
                     }
                 } else {
                     // no guard mode, chase target
-                    UnitState::Moving
+                    if can_fire_while_moving && fire_at_will_enabled {
+                        if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
+                            UnitState::FiringAndMoving(target)
+                        } else {
+                            UnitState::Moving
+                        }
+                    } else {
+                        UnitState::Moving
+                    }
                  }
             }
-
         }
         UnitUserCommand::Move(_) => {
             if engaged_in_melee {
                 UnitState::Melee(TODO)
+            } else if can_fire_while_moving && missile_attack_available {
+                if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
+                    UnitState::FiringAndMoving(target)
+                } else {
+                    UnitState::Moving
+                }
             } else {
                 UnitState::Moving
             }
@@ -268,8 +226,12 @@ pub fn calculate_next_unit_state(
             if engaged_in_melee {
                 UnitState::Melee(TODO)
             } else {
-                if missile_attack_available && fire_at_will_enabled && targets_in_range {
-                    UnitState::Firing(enemies_within_melee_range[0])    
+                if missile_attack_available && fire_at_will_enabled {
+                    if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
+                        UnitState::Firing(target)    
+                    } else {
+                        UnitState::Idle
+                    }
                 } else {
                     UnitState::Idle
                 }
@@ -293,6 +255,7 @@ pub fn unit_state_machine_system(
             unit.guard_mode_enabled, 
             unit.guard_mode_enabled,
             unit.is_missile_attack_available(),
+            unit.can_fire_while_moving(),
         );
     }
 }
@@ -353,7 +316,7 @@ pub fn unit_movement_system(
             .expect("collider");
 
         // if the unit is going somewhere
-        if let UnitState::Moving = &unit.state {
+        if let UnitState::Moving | UnitState::FiringAndMoving(_) = &unit.state {
             if let Some(dest) = match &unit.current_command {
                 UnitUserCommand::AttackMelee(_) | UnitUserCommand::AttackMissile(_) => {
                     if let WaypointComponent::Position(xy) = waypoint {

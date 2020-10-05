@@ -122,10 +122,10 @@ fn setup(
         
         // TODO add more colliders when bevy_rapier supports it.
         // for now, missile units cant engage in melee
-        let collider = if let PrimaryAttackType::Melee = ut.primary_attack_type() {
-            ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true);
+        let collider = if let AttackType::Melee = &unit.primary_attack_type() {
+            ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true)
         } else {
-            if let MissileWeapon::Primary(stats) = unit.missile_weapon {
+            if let MissileWeapon::Primary(stats) = &unit.missile_weapon {
                 ColliderBuilder::ball(stats.range).sensor(true)
             } else {
                 unimplemented!();
@@ -144,6 +144,7 @@ fn setup(
             .with(unit)
             .with(WaypointComponent::default())
             .with(HealthComponent::default())
+            .with(NearbyUnitsComponent::default())
             .with_bundle((body, collider))
             // ui state icon
             .with_children(|parent| {

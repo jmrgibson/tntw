@@ -56,3 +56,7 @@ I picked bevy because I use Rust at work, and also the hackernews hype train.
   - ranged
   - sword
   - cav
+
+## Impl notes
+
+Each unit can only have one missile and one melee attack

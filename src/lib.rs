@@ -78,11 +78,12 @@ pub enum WaypointComponent {
 }
 
 #[derive(PartialEq)]
-pub enum PrimaryAttackType {
+pub enum AttackType {
     Melee,
     Ranged,
 }
 
+#[derive(PartialEq, Clone, Copy)]
 pub enum UnitType {
     MeleeCalvary,
     ShockCalvary,
@@ -92,15 +93,6 @@ pub enum UnitType {
     ShockInfantry,
     SpearInfantry,
     MissileInfantry,
-}
-
-impl UnitType {
-    pub fn primary_attack_type(&self) -> PrimaryAttackType {
-        match self {
-            UnitType::MissileInfantry | UnitType::MissileCalvary => PrimaryAttackType::Ranged,
-            _ => PrimaryAttackType::Melee,
-        }
-    }
 }
 
 /// Intended for UI display
@@ -226,6 +218,17 @@ impl UnitComponent {
             },
             _ => unimplemented!(),
         }
+    }
+
+    pub fn primary_attack_type(&self) -> AttackType {
+        match self.unit_type {
+            UnitType::MissileInfantry | UnitType::MissileCalvary => AttackType::Ranged,
+            _ => AttackType::Melee,
+        }
+    }
+
+    pub fn can_fire_while_moving(&self) -> bool {
+        self.unit_type == UnitType::MissileCalvary
     }
 }
 
