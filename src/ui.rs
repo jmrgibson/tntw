@@ -68,32 +68,28 @@ pub fn unit_display_system(
         // healthbar
         {
             // shrink healthbar, first get background as reference
-            let max_width = { 
-                sprite_query
-                    .get::<Sprite>(children[1])
-                    .unwrap()
-                    .size.x()
-            };
+            let max_width = { sprite_query.get::<Sprite>(children[1]).unwrap().size.x() };
             let left_anchor = {
                 transform_query
                     .get::<Transform>(children[1])
                     .unwrap()
-                    .translation().x() - (max_width / 2.0)
+                    .translation()
+                    .x()
+                    - (max_width / 2.0)
             };
-            
+
             // then update actual healtbar
-            let mut foreground = sprite_query
-                .get_mut::<Sprite>(children[2])
-                .unwrap();
-            
+            let mut foreground = sprite_query.get_mut::<Sprite>(children[2]).unwrap();
+
             let bar_size = max_width * health.ratio();
             foreground.size.set_x(bar_size);
-            
+
             transform_query
                 .get_mut::<Transform>(children[2])
                 .unwrap()
-                .translation_mut().set_x(left_anchor + bar_size / 2.0);
-            
+                .translation_mut()
+                .set_x(left_anchor + bar_size / 2.0);
+
             // update color
             let mut healthbar = icon_query
                 .get_mut::<Handle<ColorMaterial>>(children[2])
@@ -142,7 +138,7 @@ impl HeathBarMaterials {
     }
 }
 
-impl HealthComponent { 
+impl HealthComponent {
     pub fn ratio(&self) -> f32 {
         self.current_health / self.max_health
     }

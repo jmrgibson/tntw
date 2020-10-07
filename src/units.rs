@@ -1,20 +1,19 @@
 
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
 
-use bevy::{prelude::*, render::pass::ClearColor};
-use bevy_input::keyboard::*;
-use bevy_input::mouse::*;
+
+use bevy::{prelude::*};
+
+
 use bevy_rapier2d::physics::{
-    ColliderHandleComponent, RapierPhysicsPlugin, RigidBodyHandleComponent,
+    ColliderHandleComponent, RigidBodyHandleComponent,
 };
-use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{ColliderBuilder, ColliderSet};
+use bevy_rapier2d::rapier::dynamics::{RigidBodySet};
+use bevy_rapier2d::rapier::geometry::{ColliderSet};
 use bevy_rapier2d::rapier::math::Isometry;
-use bevy_rapier2d::render::RapierRenderPlugin;
 
-use crate::teams::*;
+
 use crate::physics::*;
+
 use crate::*;
 
 /// stores units that are within attack (melee or missle) range of the
@@ -36,7 +35,9 @@ pub fn unit_event_system(
     units: Query<&mut UnitComponent>,
     nearbys: Query<&mut NearbyUnitsComponent>,
 ) {
-    if game_speed.is_paused() { return; }
+    if game_speed.is_paused() {
+        return;
+    }
 
     /// this processes interactions one unit at a time within its own scope
     /// so we don't double-borrow the Unit Component
@@ -90,33 +91,69 @@ pub fn unit_event_system(
         }
         log::debug!("unit current command: {:?}", unit.current_command);
     }
-    
+
     // process state updates for units that have new events
     for event in state.event_reader.iter(&events) {
         log::debug!("event: {:?}", &event);
         match event.clone() {
             UnitInteractionEvent::Proximity(contact) => {
                 match contact {
-                    ContactType::UnitFiringRangeEnter{range_of, target} => {
-                        process_unit_proximity(range_of, target, &nearbys, contact.enter_or_exit(), AttackType::Ranged);
-                    }   
-                    ContactType::UnitFiringRangeExit{range_of, target } => {
-                        process_unit_proximity(range_of, target, &nearbys, contact.enter_or_exit(), AttackType::Ranged);
-                    }   
+                    ContactType::UnitFiringRangeEnter { range_of, target } => {
+                        process_unit_proximity(
+                            range_of,
+                            target,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Ranged,
+                        );
+                    }
+                    ContactType::UnitFiringRangeExit { range_of, target } => {
+                        process_unit_proximity(
+                            range_of,
+                            target,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Ranged,
+                        );
+                    }
                     ContactType::UnitUnitMeleeExit(e1, e2) => {
                         // separate scopes so we don't double-borrow the Unit component
-                        process_unit_proximity(e1, e2, &nearbys, contact.enter_or_exit(), AttackType::Melee);
-                        process_unit_proximity(e2, e1, &nearbys, contact.enter_or_exit(), AttackType::Melee);
+                        process_unit_proximity(
+                            e1,
+                            e2,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Melee,
+                        );
+                        process_unit_proximity(
+                            e2,
+                            e1,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Melee,
+                        );
                     }
                     ContactType::UnitUnitMeleeEnter(e1, e2) => {
-                        process_unit_proximity(e1, e2, &nearbys, contact.enter_or_exit(), AttackType::Melee);
-                        process_unit_proximity(e2, e1, &nearbys, contact.enter_or_exit(), AttackType::Melee);
+                        process_unit_proximity(
+                            e1,
+                            e2,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Melee,
+                        );
+                        process_unit_proximity(
+                            e2,
+                            e1,
+                            &nearbys,
+                            contact.enter_or_exit(),
+                            AttackType::Melee,
+                        );
                     }
                     ContactType::UnitWaypointReached(e1) => {
                         let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
                         unit.current_command = UnitUserCommand::None_;
                     }
-                }             
+                }
             }
             UnitInteractionEvent::Ui(entity, cmd) => {
                 process_unit_command(entity, cmd, &units);
@@ -125,20 +162,15 @@ pub fn unit_event_system(
     }
 }
 
-
 /// Returns None if no targets available
 /// TODO make this fancier
-pub fn pick_missile_target(
-    available_targets: &Vec<Entity>
-) -> Option<Entity> {
+pub fn pick_missile_target(available_targets: &Vec<Entity>) -> Option<Entity> {
     available_targets.get(0).map(|e| e.clone())
 }
 
 /// Returns None if no targets available
 /// TODO make this fancier
-pub fn pick_melee_target(
-    available_targets: &Vec<Entity>
-) -> Option<Entity> {
+pub fn pick_melee_target(available_targets: &Vec<Entity>) -> Option<Entity> {
     available_targets.get(0).map(|e| e.clone())
 }
 
@@ -160,7 +192,7 @@ pub fn calculate_next_unit_state(
     match current_command {
         UnitUserCommand::AttackMelee(cmd_target) => {
             if enemies_within_melee_range.contains(&cmd_target) {
-                // priority target should be the user command 
+                // priority target should be the user command
                 UnitState::Melee(cmd_target.clone())
             } else if engaged_in_melee {
                 UnitState::Melee(TODO)
@@ -183,11 +215,10 @@ pub fn calculate_next_unit_state(
                 UnitState::Idle
             } else if enemies_within_missile_range.contains(&cmd_target) {
                 UnitState::Firing(cmd_target.clone())
-            } else {  // target is not within missle range
+            } else {
+                // target is not within missle range
                 if guard_mode_enabled {
-                    if let Some(target) = pick_missile_target(
-                        &enemies_within_missile_range
-                    ) { 
+                    if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
                         if fire_at_will_enabled {
                             // if other targets within missle range, fire at will on
                             // start firing
@@ -209,7 +240,7 @@ pub fn calculate_next_unit_state(
                     } else {
                         UnitState::Moving
                     }
-                 }
+                }
             }
         }
         UnitUserCommand::Move(_) => {
@@ -231,7 +262,7 @@ pub fn calculate_next_unit_state(
             } else {
                 if missile_attack_available && fire_at_will_enabled {
                     if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
-                        UnitState::Firing(target)    
+                        UnitState::Firing(target)
                     } else {
                         UnitState::Idle
                     }
@@ -244,25 +275,30 @@ pub fn calculate_next_unit_state(
 }
 
 /// Updates each units state machine
-pub fn unit_state_machine_system(
-    game_speed: Res<GameSpeed>,
-    mut units: Query<&mut UnitComponent>
-) {
-    if game_speed.is_paused() { return; }
+pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<&mut UnitComponent>) {
+    if game_speed.is_paused() {
+        return;
+    }
 
     for mut unit in &mut units.iter() {
         let melee_range_enemies = vec![];
         let missile_range_enemies = vec![];
 
-        unit.state = calculate_next_unit_state(
+        let new_state = calculate_next_unit_state(
             &unit.current_command,
             melee_range_enemies,
             missile_range_enemies,
-            unit.guard_mode_enabled, 
+            unit.guard_mode_enabled,
             unit.guard_mode_enabled,
             unit.is_missile_attack_available(),
             unit.can_fire_while_moving(),
         );
+
+        if unit.state != new_state {
+            log::debug!("Unit state transition {:?}->{:?}", unit.state, new_state);
+        }
+
+        unit.state = new_state;
     }
 }
 
@@ -272,7 +308,9 @@ pub fn unit_waypoint_system(
     mut unit_query: Query<(&UnitComponent, &mut WaypointComponent)>,
     target_query: Query<&Transform>,
 ) {
-    if game_speed.is_paused() { return; }
+    if game_speed.is_paused() {
+        return;
+    }
 
     for (unit, mut waypoint) in &mut unit_query.iter() {
         match &unit.current_command {
@@ -312,7 +350,9 @@ pub fn unit_movement_system(
         &WaypointComponent,
     )>,
 ) {
-    if game_speed.is_paused() { return; }
+    if game_speed.is_paused() {
+        return;
+    }
 
     for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
         &mut unit_query.iter()
@@ -385,7 +425,5 @@ pub fn unit_movement_system(
 #[cfg(test)]
 mod test {
     #[test]
-    fn test_unit_state_machine() {
-        
-    }
+    fn test_unit_state_machine() {}
 }

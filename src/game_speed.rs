@@ -47,10 +47,6 @@ pub enum GameSpeedRequest {
     SetSpeed(f32),
 }
 
-pub struct Blah {
-    foo: bool,
-}
-
 pub struct GameSpeedPlugin;
 
 impl Plugin for GameSpeedPlugin {
@@ -71,7 +67,7 @@ fn game_speed_update(
         match game_speed {
             GameSpeedRequest::Pause => game_time.pause(),
             GameSpeedRequest::Unpause => game_time.unpause(),
-            GameSpeedRequest::SetSpeed(speed) => unimplemented!(),
+            GameSpeedRequest::SetSpeed(_speed) => unimplemented!(),
             GameSpeedRequest::TogglePause => game_time.toggle_pause(),
         }
         log::info!("Changing Game Speed: {:?}", game_speed);

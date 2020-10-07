@@ -23,6 +23,7 @@ an AI opponent.
 - rudimentray melee combat when units engage with eachother
 - unit collision detection
 - healthbars
+- pause (but no new commands can be issued during pause)
 
 ## Coming soon(tm)
 
@@ -33,6 +34,7 @@ an AI opponent.
 - teams
 - box for drag-select
 - unit acceleration and rotation
+- game speed controls
 
 ## Why
 

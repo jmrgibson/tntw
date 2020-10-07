@@ -1,18 +1,16 @@
-use std::collections::HashMap;
+
 use std::time::{Duration, Instant};
 
-use bevy::{prelude::*, render::pass::ClearColor};
+use bevy::{prelude::*};
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
-use bevy_rapier2d::physics::{
-    ColliderHandleComponent, RapierPhysicsPlugin, RigidBodyHandleComponent,
-};
-use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{ColliderBuilder, ColliderSet};
-use bevy_rapier2d::rapier::math::Isometry;
-use bevy_rapier2d::render::RapierRenderPlugin;
 
-use itertools::Itertools;
+
+
+
+
+
+
 
 use crate::*;
 
@@ -26,10 +24,8 @@ pub enum MouseCommand {
     Action(XyPos),
 }
 
-
 const DOUBLE_CLICK_WINDOW: Duration = Duration::from_millis(500);
 const DRAG_SELECT_MIN_BOX: f32 = 100.0;
-
 
 pub struct InputState {
     keys: EventReader<KeyboardInput>,
@@ -63,7 +59,6 @@ impl Default for InputState {
     }
 }
 
-
 pub fn input_system(
     mut engine_commands: Commands,
     mut state: ResMut<InputState>,
@@ -95,7 +90,7 @@ pub fn input_system(
                     KeyCode::Tab => {
                         // remember, must be tuple here!
                         engine_commands.spawn((GameSpeedRequest::TogglePause,));
-                    },
+                    }
                     KeyCode::LShift => state.is_toggle_select_on = true,
                     KeyCode::LControl => state.is_multi_select_on = true,
                     _ => (),
@@ -283,8 +278,6 @@ pub fn cursor_system(
     }
 }
 
-
-
 /// TODO handle rotation, does this also handle dynamic sprite sizing?
 /// TODO there is most certainly a better way of doing this math
 fn is_position_within_sprite(
@@ -312,4 +305,3 @@ fn is_translation_within_box(position_to_check: &Vec3, corner: &Vec2, end: &Vec2
     };
     in_x && in_y
 }
-

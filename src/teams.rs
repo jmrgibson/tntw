@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 pub type TeamId = usize;
 
-/// units on the debug team can be controlled and attacked by any team 
+/// units on the debug team can be controlled and attacked by any team
 pub const DEBUG_TEAM: TeamId = 0;
 
 #[derive(Clone, Debug, PartialEq)]

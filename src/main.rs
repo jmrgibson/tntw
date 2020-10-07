@@ -2,17 +2,17 @@
 #![allow(dead_code)]
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+
 
 use bevy::{prelude::*, render::pass::ClearColor};
-use bevy_input::keyboard::*;
-use bevy_input::mouse::*;
+
+
 use bevy_rapier2d::physics::{
     ColliderHandleComponent, RapierPhysicsPlugin, RigidBodyHandleComponent,
 };
-use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder, RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{ColliderBuilder, ColliderSet};
-use bevy_rapier2d::rapier::math::Isometry;
+use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder};
+use bevy_rapier2d::rapier::geometry::{ColliderBuilder};
+
 use bevy_rapier2d::render::RapierRenderPlugin;
 
 use itertools::Itertools;
@@ -22,9 +22,8 @@ use tntw::physics::*;
 use tntw::teams::*;
 use tntw::ui;
 use tntw::units::*;
-use tntw::*;
 use tntw::user_input;
-
+use tntw::*;
 
 fn main() {
     env_logger::init();
@@ -106,8 +105,8 @@ fn setup(
         .spawn(UiCameraComponents::default());
 
     let unit_start_positions = vec![
-        (UnitType::MissileInfantry, 1, 50.0, 0.0),
-        (UnitType::MeleeInfantry, 2, -50.0, 0.0),
+        (UnitType::MissileInfantry, 1, 150.0, 0.0),
+        (UnitType::MeleeInfantry, 2, -150.0, 0.0),
     ];
 
     let unit_size = 30.0;
@@ -117,11 +116,11 @@ fn setup(
 
     for (ut, team, x, y) in unit_start_positions.into_iter() {
         let unit = UnitComponent::default_from_type(ut, team);
-        
+
         let body = RigidBodyBuilder::new_dynamic()
             .translation(x, y)
             .can_sleep(false); // things start annoyingly asleep
-        
+
         // TODO add more colliders when bevy_rapier supports it.
         // for now, missile units cant engage in melee
         let collider = if let AttackType::Melee = &unit.primary_attack_type() {
@@ -170,31 +169,25 @@ fn setup(
                 // background
                 parent.spawn(SpriteComponents {
                     material: healthbar_materials.background.into(),
-                    transform: Transform::from_translation(Vec3::new(
-                        xpos,
-                        ypos,
-                        1.0,
-                    )),
+                    transform: Transform::from_translation(Vec3::new(xpos, ypos, 1.0)),
                     sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
                     ..Default::default()
                 });
                 // foreground
                 parent.spawn(SpriteComponents {
                     material: healthbar_materials.high.into(),
-                    transform: Transform::from_translation(Vec3::new(
-                        xpos,
-                        ypos,
-                        2.0,
-                    )),
+                    transform: Transform::from_translation(Vec3::new(xpos, ypos, 2.0)),
                     sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
                     ..Default::default()
                 });
-            })
-            ;
+            });
     }
 
     // populate teams
-    for team_pair in all_teams.into_iter().tuple_combinations::<(TeamId, TeamId)>() {
+    for team_pair in all_teams
+        .into_iter()
+        .tuple_combinations::<(TeamId, TeamId)>()
+    {
         if team_pair.0 == team_pair.1 {
             team_lookup.0.insert(team_pair, TeamRelation::Same);
         } else {
@@ -214,6 +207,4 @@ fn setup(
         camera_e: e,
         last_pos: XyPos::default(),
     });
-
 }
-

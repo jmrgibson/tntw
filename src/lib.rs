@@ -1,11 +1,9 @@
 #![deny(unreachable_patterns)]
-use bevy::{
-    prelude::*,
-};
+use bevy::prelude::*;
 
+use crate::game_speed::{GameSpeed, GameSpeedRequest};
 use crate::physics::ContactType;
 use crate::teams::*;
-use crate::game_speed::{GameSpeed, GameSpeedRequest};
 
 pub mod combat;
 pub mod game_speed;
@@ -192,12 +190,14 @@ impl UnitComponent {
     }
 
     pub fn is_missile_attack_available(&self) -> bool {
-        if let MissileWeapon::Primary(stats) | MissileWeapon::Secondary(stats) = &self.missile_weapon {
+        if let MissileWeapon::Primary(stats) | MissileWeapon::Secondary(stats) =
+            &self.missile_weapon
+        {
             stats.current_ammunition > 0
         } else {
             false
         }
-    }   
+    }
 
     pub fn default_from_type(unit_type: UnitType, team: TeamId) -> UnitComponent {
         match unit_type {
@@ -209,10 +209,10 @@ impl UnitComponent {
             },
             UnitType::MissileInfantry => UnitComponent {
                 max_speed: 80.0,
-                missile_weapon: MissileWeapon::Primary(MissileStats{
+                missile_weapon: MissileWeapon::Primary(MissileStats {
                     max_ammunition: 500,
                     current_ammunition: 500,
-                    range: 500.0,
+                    range: 100.0,
                     type_: MissileType::Bow,
                 }),
                 unit_type,
@@ -239,7 +239,7 @@ impl Default for UnitComponent {
     fn default() -> Self {
         UnitComponent {
             current_command: UnitUserCommand::None_,
-            state: UnitState::Moving,
+            state: UnitState::Idle,
             max_speed: 50.0,
             is_selected: false,
             is_running: false,
