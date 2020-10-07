@@ -176,15 +176,15 @@ pub fn pick_melee_target(available_targets: &Vec<Entity>) -> Option<Entity> {
 
 pub fn calculate_next_unit_state(
     current_command: &UnitUserCommand,
-    enemies_within_melee_range: Vec<Entity>,
-    enemies_within_missile_range: Vec<Entity>,
+    enemies_within_melee_range: &Vec<Entity>,
+    enemies_within_missile_range: &Vec<Entity>,
     guard_mode_enabled: bool,
     fire_at_will_enabled: bool,
     missile_attack_available: bool,
     can_fire_while_moving: bool,
 ) -> UnitState {
     // should be current active target
-    let TODO = enemies_within_melee_range[0];
+    let TODO = enemies_within_melee_range.get(0).map(|e| e.clone());
     let target_is_dead = false; // TODO
 
     let engaged_in_melee = !enemies_within_melee_range.is_empty();
@@ -195,7 +195,7 @@ pub fn calculate_next_unit_state(
                 // priority target should be the user command
                 UnitState::Melee(cmd_target.clone())
             } else if engaged_in_melee {
-                UnitState::Melee(TODO)
+                UnitState::Melee(TODO.unwrap())
             } else if target_is_dead {
                 UnitState::Idle
             } else {
@@ -210,7 +210,7 @@ pub fn calculate_next_unit_state(
         }
         UnitUserCommand::AttackMissile(cmd_target) => {
             if engaged_in_melee {
-                UnitState::Melee(TODO)
+                UnitState::Melee(TODO.unwrap())
             } else if !missile_attack_available {
                 UnitState::Idle
             } else if enemies_within_missile_range.contains(&cmd_target) {
@@ -245,7 +245,7 @@ pub fn calculate_next_unit_state(
         }
         UnitUserCommand::Move(_) => {
             if engaged_in_melee {
-                UnitState::Melee(TODO)
+                UnitState::Melee(TODO.unwrap())
             } else if can_fire_while_moving && missile_attack_available {
                 if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
                     UnitState::FiringAndMoving(target)
@@ -258,7 +258,7 @@ pub fn calculate_next_unit_state(
         }
         UnitUserCommand::None_ => {
             if engaged_in_melee {
-                UnitState::Melee(TODO)
+                UnitState::Melee(TODO.unwrap())
             } else {
                 if missile_attack_available && fire_at_will_enabled {
                     if let Some(target) = pick_missile_target(&enemies_within_missile_range) {
@@ -275,27 +275,25 @@ pub fn calculate_next_unit_state(
 }
 
 /// Updates each units state machine
-pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<&mut UnitComponent>) {
+pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&mut UnitComponent, &NearbyUnitsComponent)>) {
     if game_speed.is_paused() {
         return;
     }
 
-    for mut unit in &mut units.iter() {
-        let melee_range_enemies = vec![];
-        let missile_range_enemies = vec![];
+    for (mut unit, nearbys) in &mut units.iter() {
 
         let new_state = calculate_next_unit_state(
             &unit.current_command,
-            melee_range_enemies,
-            missile_range_enemies,
+            &nearbys.melee_range,
+            &nearbys.missle_range,
             unit.guard_mode_enabled,
-            unit.guard_mode_enabled,
+            unit.fire_at_will,
             unit.is_missile_attack_available(),
             unit.can_fire_while_moving(),
         );
 
         if unit.state != new_state {
-            log::debug!("Unit state transition {:?}->{:?}", unit.state, new_state);
+            log::debug!("Unit state transition {:?}->{:?} with command {:?}", unit.state, new_state, unit.current_command);
         }
 
         unit.state = new_state;

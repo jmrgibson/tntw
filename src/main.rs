@@ -42,18 +42,23 @@ fn main() {
         .init_resource::<ui::HeathBarMaterials>()
         .init_resource::<TeamRelationshipLookup>()
         .add_event::<UnitInteractionEvent>()
+
         .add_startup_system(setup.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_system(user_input::cursor_system.system())
         .add_system(user_input::input_system.system())
-        .add_system(unit_waypoint_system.system())
+
         .add_system(unit_event_system.system())
+        .add_system(unit_state_machine_system.system())
+        .add_system(unit_waypoint_system.system())
         .add_system(unit_movement_system.system())
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
+        
         .add_system(unit_melee_system.system())
         .add_system(unit_missile_system.system())
+        
         .add_system(ui::unit_display_system.system())
         .add_system_to_stage(
             stage::POST_UPDATE,

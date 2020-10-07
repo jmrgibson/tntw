@@ -29,10 +29,7 @@ const DRAG_SELECT_MIN_BOX: f32 = 100.0;
 
 pub struct InputState {
     keys: EventReader<KeyboardInput>,
-    cursor: EventReader<CursorMoved>,
-    motion: EventReader<MouseMotion>,
     mousebtn: EventReader<MouseButtonInput>,
-    scroll: EventReader<MouseWheel>,
     /// ie, ctrl+select
     is_multi_select_on: bool,
     /// ie, shift+select
@@ -47,10 +44,7 @@ impl Default for InputState {
     fn default() -> Self {
         InputState {
             keys: EventReader::default(),
-            cursor: EventReader::default(),
-            motion: EventReader::default(),
             mousebtn: EventReader::default(),
-            scroll: EventReader::default(),
             is_multi_select_on: false,
             is_toggle_select_on: false,
             last_mouse_action: None,
