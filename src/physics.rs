@@ -30,7 +30,6 @@ pub enum ContactType {
     UnitUnitMeleeExit(Entity, Entity),
     UnitFiringRangeEnter { range_of: Entity, target: Entity },
     UnitFiringRangeExit { range_of: Entity, target: Entity },
-    UnitWaypointReached(Entity),
 }
 
 pub fn unit_proximity_interaction_system(
@@ -215,7 +214,6 @@ impl ContactType {
             ContactType::UnitFiringRangeExit { .. } | ContactType::UnitUnitMeleeExit(..) => {
                 EnterOrExit::Exit
             }
-            _ => unimplemented!(),
         }
     }
 }

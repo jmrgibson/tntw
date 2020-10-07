@@ -8,51 +8,49 @@ use bevy::prelude::*;
 use crate::*;
 
 const ATTACK_DAMAGE: f32 = 1.0;
-const MISSILE_DAMAGE: f32 = 0.3;
+const MISSILE_DAMAGE: f32 = 3.3;
 
 pub fn unit_melee_system(
-    mut commands: Commands,
+    mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
     mut unit_query: Query<&UnitComponent>,
-    health_query: Query<(Entity, &mut HealthComponent)>,
+    health_query: Query<(&mut HealthComponent)>,
 ) {
     if game_speed.is_paused() {
         return;
     }
 
     for unit in &mut unit_query.iter() {
-        if let UnitState::Melee(target) = unit.state {
+        if let UnitState::Melee(Some(target)) = unit.state {
             let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
             target_heath.current_health -= ATTACK_DAMAGE;
 
             if target_heath.current_health < 0.0 {
                 log::info!("unit dead!");
-                // TODO make event so that the unit state machine clears itself
-                commands.despawn_recursive(target);
+                unit_events.send(UnitInteractionEvent::UnitDied(target));
             }
         }
     }
 }
 
 pub fn unit_missile_system(
-    mut commands: Commands,
+    mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
     mut unit_query: Query<&UnitComponent>,
-    health_query: Query<(Entity, &mut HealthComponent)>,
+    health_query: Query<(&mut HealthComponent)>,
 ) {
     if game_speed.is_paused() {
         return;
     }
-
+    
     for unit in &mut unit_query.iter() {
-        if let UnitState::Firing(target) | UnitState::FiringAndMoving(target) = unit.state {
+        if let UnitState::Firing(Some(target)) | UnitState::FiringAndMoving(Some(target)) = unit.state {
             let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
             target_heath.current_health -= MISSILE_DAMAGE;
 
             if target_heath.current_health < 0.0 {
                 log::info!("unit dead!");
-                // TODO make event so that the unit state machine clears itself
-                commands.despawn_recursive(target);
+                unit_events.send(UnitInteractionEvent::UnitDied(target));
             }
         }
     }

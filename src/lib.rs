@@ -29,6 +29,8 @@ pub struct UnitInteractionState {
 pub enum UnitInteractionEvent {
     Proximity(ContactType),
     Ui(Entity, UnitUiCommand),
+    UnitDied(Entity),
+    UnitWaypointReached(Entity),
 }
 
 pub enum MissileType {
@@ -117,12 +119,33 @@ pub enum UnitUserCommand {
 #[derive(Clone, Debug, PartialEq)]
 pub enum UnitState {
     Idle,
-    // I should take these entites out and store them separately?!?
-    Firing(Entity),
-    /// Damnit horse archers complicating things
-    FiringAndMoving(Entity),
-    Melee(Entity),
+    /// optional entity is the unit it is fighting.
+    /// is Some if target is still alive, None if target died 
+    Firing(Option<Entity>),
+    /// Damn horse archers complicating things
+    FiringAndMoving(Option<Entity>),
+    Melee(Option<Entity>),
     Moving,
+}
+
+impl UnitState {
+    /// is Some if target is still alive, None if target died 
+    pub fn current_actively_fighting(&self) -> Option<Entity> {
+        if let UnitState::Melee(e) | UnitState::Firing(e) | UnitState::FiringAndMoving(e) = self {
+            e.map(|e| e.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_target(&mut self) {
+        match self {
+            UnitState::Melee(_) => *self = UnitState::Melee(None),
+            UnitState::Firing(_) => *self = UnitState::Firing(None),
+            UnitState::FiringAndMoving(_) => *self = UnitState::FiringAndMoving(None),
+            _ => (),
+        }
+    }
 }
 
 /// possible actions given to the unit by the user
