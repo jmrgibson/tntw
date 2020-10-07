@@ -1,6 +1,8 @@
 //! Combat must happen AFTER states have been calcualted so that we aren't in combat with a 
 //! unit that got cleaned up at the end of the last loop
 
+// TODO unit timers on how fast combat should happen
+
 use bevy::prelude::*;
 
 use crate::*;
@@ -10,9 +12,12 @@ const MISSILE_DAMAGE: f32 = 0.3;
 
 pub fn unit_melee_system(
     mut commands: Commands,
+    game_speed: Res<GameSpeed>,
     mut unit_query: Query<&UnitComponent>,
     health_query: Query<(Entity, &mut HealthComponent)>,
 ) {
+    if game_speed.is_paused() { return; }
+    
     for unit in &mut unit_query.iter() {
         if let UnitState::Melee(target) = unit.state {
             let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
@@ -29,9 +34,12 @@ pub fn unit_melee_system(
 
 pub fn unit_missile_system(
     mut commands: Commands,
+    game_speed: Res<GameSpeed>,
     mut unit_query: Query<&UnitComponent>,
     health_query: Query<(Entity, &mut HealthComponent)>,
 ) {
+    if game_speed.is_paused() { return; }
+
     for unit in &mut unit_query.iter() {
         if let UnitState::Firing(target) | UnitState::FiringAndMoving(target) = unit.state {
             let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();

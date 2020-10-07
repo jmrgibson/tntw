@@ -30,11 +30,14 @@ pub struct NearbyUnitsComponent {
 /// - unit proximity interactions
 /// - TODO user commands
 pub fn unit_event_system(
+    game_speed: Res<GameSpeed>,
     mut state: Local<UnitInteractionState>,
     events: Res<Events<UnitInteractionEvent>>,
     units: Query<&mut UnitComponent>,
     nearbys: Query<&mut NearbyUnitsComponent>,
 ) {
+    if game_speed.is_paused() { return; }
+
     /// this processes interactions one unit at a time within its own scope
     /// so we don't double-borrow the Unit Component
     fn process_unit_proximity(
@@ -242,8 +245,11 @@ pub fn calculate_next_unit_state(
 
 /// Updates each units state machine
 pub fn unit_state_machine_system(
+    game_speed: Res<GameSpeed>,
     mut units: Query<&mut UnitComponent>
 ) {
+    if game_speed.is_paused() { return; }
+
     for mut unit in &mut units.iter() {
         let melee_range_enemies = vec![];
         let missile_range_enemies = vec![];
@@ -262,9 +268,12 @@ pub fn unit_state_machine_system(
 
 /// for each unit, calculates the position of its waypoint
 pub fn unit_waypoint_system(
+    game_speed: Res<GameSpeed>,
     mut unit_query: Query<(&UnitComponent, &mut WaypointComponent)>,
     target_query: Query<&Transform>,
 ) {
+    if game_speed.is_paused() { return; }
+
     for (unit, mut waypoint) in &mut unit_query.iter() {
         match &unit.current_command {
             UnitUserCommand::AttackMelee(target) | UnitUserCommand::AttackMissile(target) => {
@@ -289,6 +298,7 @@ pub fn unit_waypoint_system(
 // that is updated in a separate system, so its calculated separately from the unit movement system
 // so we don't run into unique borrow issues
 pub fn unit_movement_system(
+    game_speed: Res<GameSpeed>,
     time: Res<Time>,
     mut bodies: ResMut<RigidBodySet>,
     mut colliders: ResMut<ColliderSet>,
@@ -302,6 +312,8 @@ pub fn unit_movement_system(
         &WaypointComponent,
     )>,
 ) {
+    if game_speed.is_paused() { return; }
+
     for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
         &mut unit_query.iter()
     {

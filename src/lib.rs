@@ -5,12 +5,15 @@ use bevy::{
 
 use crate::physics::ContactType;
 use crate::teams::*;
+use crate::game_speed::{GameSpeed, GameSpeedRequest};
 
 pub mod combat;
+pub mod game_speed;
 pub mod physics;
 pub mod teams;
 pub mod ui;
 pub mod units;
+pub mod user_input;
 
 const WALKING_SPEED_FACTOR: f32 = 0.5;
 const MAX_HP: f32 = 100.0;
