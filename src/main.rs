@@ -36,6 +36,7 @@ fn main() {
         .add_resource(ClearColor(Color::rgb(0.7, 0.7, 0.7)))
         .add_resource(BodyHandleToEntity(HashMap::new()))
         .add_resource(EntityToBodyHandle(HashMap::new()))
+        .add_resource(EntityToColliderType(HashMap::new()))
         .add_resource(DebugTimer(Timer::from_seconds(1.0, true)))
         .init_resource::<user_input::InputState>()
         .init_resource::<ui::SelectionMaterials>()

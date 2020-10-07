@@ -25,12 +25,16 @@ impl GameSpeed {
         self.is_paused
     }
 
+    pub fn toggle_pause(&mut self) {
+        self.is_paused = !self.is_paused;
+    }
+
     pub fn pause(&mut self) {
-        self.is_paused = true
+        self.is_paused = true;
     }
 
     pub fn unpause(&mut self) {
-        self.is_paused = false
+        self.is_paused = false;
     }
 }
 
@@ -38,8 +42,13 @@ impl GameSpeed {
 #[derive(Debug)]
 pub enum GameSpeedRequest {
     Pause,
+    TogglePause,
     Unpause,
     SetSpeed(f32),
+}
+
+pub struct Blah {
+    foo: bool,
 }
 
 pub struct GameSpeedPlugin;
@@ -63,6 +72,7 @@ fn game_speed_update(
             GameSpeedRequest::Pause => game_time.pause(),
             GameSpeedRequest::Unpause => game_time.unpause(),
             GameSpeedRequest::SetSpeed(speed) => unimplemented!(),
+            GameSpeedRequest::TogglePause => game_time.toggle_pause(),
         }
         log::info!("Changing Game Speed: {:?}", game_speed);
         // game_time.game_speed = game_speed.new_game_speed;

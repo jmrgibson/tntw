@@ -65,6 +65,7 @@ impl Default for InputState {
 
 
 pub fn input_system(
+    mut engine_commands: Commands,
     mut state: ResMut<InputState>,
     cursor: Res<CursorState>,
     ev_keys: Res<Events<KeyboardInput>>,
@@ -78,18 +79,23 @@ pub fn input_system(
         &mut WaypointComponent,
     )>,
 ) {
-    let mut new_commands: Vec<UnitUiCommand> = Vec::new();
+    let mut ui_commands: Vec<UnitUiCommand> = Vec::new();
 
     // Keyboard input
     for ev in state.keys.iter(&ev_keys) {
         if ev.state.is_pressed() {
             // on press
             if let Some(key) = ev.key_code {
+                log::trace!("pressed {:?}", key);
                 match key {
-                    KeyCode::S => new_commands.push(UnitUiCommand::Stop),
-                    KeyCode::R => new_commands.push(UnitUiCommand::ToggleSpeed),
-                    KeyCode::G => new_commands.push(UnitUiCommand::ToggleGuardMode),
-                    KeyCode::F => new_commands.push(UnitUiCommand::ToggleFireAtWill),
+                    KeyCode::S => ui_commands.push(UnitUiCommand::Stop),
+                    KeyCode::R => ui_commands.push(UnitUiCommand::ToggleSpeed),
+                    KeyCode::G => ui_commands.push(UnitUiCommand::ToggleGuardMode),
+                    KeyCode::F => ui_commands.push(UnitUiCommand::ToggleFireAtWill),
+                    KeyCode::Tab => {
+                        // remember, must be tuple here!
+                        engine_commands.spawn((GameSpeedRequest::TogglePause,));
+                    },
                     KeyCode::LShift => state.is_toggle_select_on = true,
                     KeyCode::LControl => state.is_multi_select_on = true,
                     _ => (),
@@ -222,7 +228,7 @@ pub fn input_system(
             } else {
                 UnitUiCommand::Move(pos.clone(), speed)
             };
-            new_commands.push(cmd);
+            ui_commands.push(cmd);
         }
         None => (),
     }
@@ -231,7 +237,7 @@ pub fn input_system(
     // is it gross iterating over the query twice in one function?
     for (entity, unit, _transform, _sprite, mut _waypoint) in &mut query.iter() {
         if unit.is_selected() {
-            for cmd in new_commands.clone() {
+            for cmd in ui_commands.clone() {
                 unit_events.send(UnitInteractionEvent::Ui(entity, cmd));
                 log::info!("Assigning {:?} command", cmd);
             }
