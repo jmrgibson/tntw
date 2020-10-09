@@ -320,12 +320,12 @@ pub fn calculate_next_unit_state_and_target(
 }
 
 /// Updates each units state machine
-pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&mut UnitComponent, &NearbyUnitsComponent)>) {
+pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&mut UnitComponent, &NearbyUnitsComponent, &MissileWeaponComponent)>) {
     if game_speed.is_paused() {
         return;
     }
 
-    for (mut unit, nearbys) in &mut units.iter() {
+    for (mut unit, nearbys, missile) in &mut units.iter() {
 
         let new_state = calculate_next_unit_state_and_target(
             &unit.current_command,
@@ -333,7 +333,7 @@ pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&
             &nearbys.missle_range,
             unit.guard_mode_enabled,
             unit.fire_at_will,
-            unit.is_missile_attack_available(),
+            missile.is_missile_attack_available(),
             unit.can_fire_while_moving(),
             unit.state.current_actively_fighting(),
         );

@@ -121,18 +121,15 @@ pub fn body_to_entity_system(
     mut e_to_bh: ResMut<EntityToBodyHandle>,
     mut e_to_ct: ResMut<EntityToColliderType>,
     mut added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
-    units: Query<&UnitComponent>,
+    unit_missile: Query<&MissileWeaponComponent>,
 ) {
     for (entity, body_handle) in &mut added.iter() {
         log::debug!("new rigid body");
         bh_to_e.0.insert(body_handle.handle(), entity);
         e_to_bh.0.insert(entity, body_handle.handle());
-        let ct = if let MissileWeapon::None =
-            units.get::<UnitComponent>(entity).unwrap().missile_weapon
-        {
-            ColliderType::Melee
-        } else {
-            ColliderType::FiringRange
+        let ct = match *unit_missile.get::<MissileWeaponComponent>(entity).unwrap() {
+            MissileWeaponComponent::None => ColliderType::Melee,
+            _ => ColliderType::FiringRange,
         };
         e_to_ct.0.insert(entity, ct);
     }

@@ -37,16 +37,20 @@ pub fn unit_melee_system(
 pub fn unit_missile_system(
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
-    mut unit_query: Query<(&UnitComponent, &CombatComponent)>,
+    mut unit_query: Query<(&UnitComponent, &CombatComponent, &mut MissileWeaponComponent)>,
     health_query: Query<&mut HealthComponent>,
-    target_query: Query<&CombatComponent>
+    target_query: Query<&CombatComponent>,
 ) {
     if game_speed.is_paused() {
         return;
     }
     
-    for (unit, source) in &mut unit_query.iter() {
+    for (unit, source, mut missile) in &mut unit_query.iter() {
         if let UnitState::Firing(Some(target)) | UnitState::FiringAndMoving(Some(target)) = unit.state {
+            debug_assert!(missile.is_missile_attack_available());
+
+            missile.use_ammo();
+
             let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
             let target_combat = target_query.get::<CombatComponent>(target).unwrap();
             target_heath.current_health -= calc_damage(source, &target_combat);

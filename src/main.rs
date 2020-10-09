@@ -40,7 +40,7 @@ fn main() {
         .init_resource::<user_input::InputState>()
         .init_resource::<ui::SelectionMaterials>()
         .init_resource::<ui::HeathBarMaterials>()
-        .init_resource::<TeamRelationshipLookup>()
+        .init_resource::<TeamsResource>()
         .add_event::<UnitInteractionEvent>()
 
         .add_startup_system(setup.system())
@@ -69,7 +69,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut team_lookup: ResMut<TeamRelationshipLookup>,
+    mut teams: ResMut<TeamsResource>,
     selection_materials: Res<ui::SelectionMaterials>,
     healthbar_materials: Res<ui::HeathBarMaterials>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -117,10 +117,8 @@ fn setup(
     let unit_size = 30.0;
     let state_icon_size = 12.0;
 
-    let mut all_teams = vec![];
-
-    for (ut, team, x, y) in unit_start_positions.into_iter() {
-        let unit = UnitComponent::default_from_type(ut, team);
+    for (ut, player, x, y) in unit_start_positions.into_iter() {
+        let (unit, missile) = UnitComponent::default_from_type(ut, player);
 
         let body = RigidBodyBuilder::new_dynamic()
             .translation(x, y)
@@ -131,14 +129,14 @@ fn setup(
         let collider = if let AttackType::Melee = &unit.primary_attack_type() {
             ColliderBuilder::cuboid(unit_size / 2.0, unit_size / 2.0).sensor(true)
         } else {
-            if let MissileWeapon::Primary(stats) = &unit.missile_weapon {
+            if let MissileWeaponComponent::Primary(stats) = &missile {
                 ColliderBuilder::ball(stats.range).sensor(true)
             } else {
                 unimplemented!();
             }
         };
 
-        all_teams.push(team);
+        teams.add_player(player, player);
 
         commands
             .spawn(SpriteComponents {
@@ -148,6 +146,7 @@ fn setup(
                 ..Default::default()
             })
             .with(unit)
+            .with(missile)
             .with(WaypointComponent::default())
             .with(HealthComponent::default())
             .with(CombatComponent::default())
@@ -189,18 +188,7 @@ fn setup(
             });
     }
 
-    // populate teams
-    for team_pair in all_teams
-        .into_iter()
-        .tuple_combinations::<(TeamId, TeamId)>()
-    {
-        if team_pair.0 == team_pair.1 {
-            team_lookup.0.insert(team_pair, TeamRelation::Same);
-        } else {
-            // TODO support allies
-            team_lookup.0.insert(team_pair, TeamRelation::Enemy);
-        }
-    }
+    teams.free_for_all();
 
     // set up cursor tracker
     let camera = Camera2dComponents::default();

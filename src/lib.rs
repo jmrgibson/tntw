@@ -46,7 +46,7 @@ pub struct MissileStats {
     pub type_: MissileType,
 }
 
-pub enum MissileWeapon {
+pub enum MissileWeaponComponent {
     Primary(MissileStats),
     Secondary(MissileStats),
     None,
@@ -57,8 +57,7 @@ pub struct UnitComponent {
     pub state: UnitState,
     max_speed: f32,
     is_selected: bool,
-    pub team: TeamId,
-    pub missile_weapon: MissileWeapon,
+    pub player_id: PlayerId,
     pub unit_type: UnitType,
     pub is_running: bool,
     /// "guard mode" determines if the current unit will persue fleeing units if they
@@ -75,6 +74,7 @@ pub struct HealthComponent {
     max_health: f32,
 }
 
+/// should contain read-only stats
 pub struct CombatComponent {
     armour: f32,
     ap_damage: f32,
@@ -220,38 +220,35 @@ impl UnitComponent {
         }
     }
 
-    pub fn is_missile_attack_available(&self) -> bool {
-        if let MissileWeapon::Primary(stats) | MissileWeapon::Secondary(stats) =
-            &self.missile_weapon
-        {
-            stats.current_ammunition > 0
-        } else {
-            false
-        }
-    }
-
-    pub fn default_from_type(unit_type: UnitType, team: TeamId) -> UnitComponent {
-        match unit_type {
+    pub fn default_from_type(unit_type: UnitType, player_id: PlayerId) -> (UnitComponent, MissileWeaponComponent) {
+        let unit  = match unit_type {
             UnitType::MeleeInfantry => UnitComponent {
                 max_speed: 50.0,
                 unit_type,
-                team,
+                player_id,
                 ..UnitComponent::default()
             },
             UnitType::MissileInfantry => UnitComponent {
                 max_speed: 80.0,
-                missile_weapon: MissileWeapon::Primary(MissileStats {
+                unit_type,
+                player_id,
+                ..UnitComponent::default()
+            },
+            _ => unimplemented!(),
+        };
+
+        let missile = match unit_type {
+            UnitType::MissileInfantry | UnitType::MissileCalvary => { MissileWeaponComponent::Primary(MissileStats {
                     max_ammunition: 500,
                     current_ammunition: 500,
                     range: 100.0,
                     type_: MissileType::Bow,
-                }),
-                unit_type,
-                team,
-                ..UnitComponent::default()
+                })
             },
-            _ => unimplemented!(),
-        }
+            _ => MissileWeaponComponent::None,
+        };
+
+        (unit, missile)
     }
 
     pub fn primary_attack_type(&self) -> AttackType {
@@ -263,6 +260,27 @@ impl UnitComponent {
 
     pub fn can_fire_while_moving(&self) -> bool {
         self.unit_type == UnitType::MissileCalvary
+    }
+}
+
+impl MissileWeaponComponent {
+    pub fn is_missile_attack_available(&self) -> bool {
+        if let MissileWeaponComponent::Primary(stats) | MissileWeaponComponent::Secondary(stats) =
+            self
+        {
+            stats.current_ammunition > 0
+        } else {
+            false
+        }
+    }
+
+    pub fn use_ammo(&mut self) {
+        match self {
+            MissileWeaponComponent::Primary(s) | MissileWeaponComponent::Secondary(s) => {
+                s.current_ammunition -= 1;
+            }
+            _ => log::error!("using ammo without a weapon???"),
+        }
     }
 }
 
@@ -278,8 +296,7 @@ impl Default for UnitComponent {
             unit_type: UnitType::MeleeInfantry,
             remaining_ammo: 10,
             fire_at_will: true,
-            team: 0,
-            missile_weapon: MissileWeapon::None,
+            player_id: 0,
         }
     }
 }
@@ -308,5 +325,11 @@ impl Default for CombatComponent {
             melee_defence: 30.0,
             normal_damage: 25.0,
         } 
+    }
+}
+
+impl Default for MissileWeaponComponent {
+    fn default() -> Self {
+        MissileWeaponComponent::None
     }
 }
