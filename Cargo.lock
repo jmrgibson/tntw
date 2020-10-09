@@ -3206,6 +3206,7 @@ dependencies = [
  "env_logger",
  "itertools",
  "log",
+ "rand",
 ]
 
 [[package]]

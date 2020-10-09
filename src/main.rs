@@ -150,6 +150,7 @@ fn setup(
             .with(unit)
             .with(WaypointComponent::default())
             .with(HealthComponent::default())
+            .with(CombatComponent::default())
             .with(NearbyUnitsComponent::default())
             .with_bundle((body, collider))
             // ui state icon

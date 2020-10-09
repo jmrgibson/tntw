@@ -75,6 +75,12 @@ pub struct HealthComponent {
     max_health: f32,
 }
 
+pub struct CombatComponent {
+    armour: f32,
+    ap_damage: f32,
+    normal_damage: f32,
+}
+
 pub enum WaypointComponent {
     None,
     Position(XyPos),
@@ -288,5 +294,15 @@ impl Default for HealthComponent {
             max_health: MAX_HP,
             current_health: MAX_HP,
         }
+    }
+}
+
+impl Default for CombatComponent {
+    fn default() -> Self {
+        CombatComponent {
+            armour: 50.0,
+            ap_damage: 3.0,
+            normal_damage: 25.0,
+        } 
     }
 }

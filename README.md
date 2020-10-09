@@ -35,6 +35,8 @@ an AI opponent.
 - box for drag-select
 - unit acceleration and rotation
 - game speed controls
+- determinism
+- replay system?
 
 ## Why
 
