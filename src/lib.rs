@@ -78,6 +78,8 @@ pub struct HealthComponent {
 pub struct CombatComponent {
     armour: f32,
     ap_damage: f32,
+    melee_attack: f32,
+    melee_defence: f32,
     normal_damage: f32,
 }
 
@@ -302,6 +304,8 @@ impl Default for CombatComponent {
         CombatComponent {
             armour: 50.0,
             ap_damage: 3.0,
+            melee_attack: 30.0,
+            melee_defence: 30.0,
             normal_damage: 25.0,
         } 
     }
