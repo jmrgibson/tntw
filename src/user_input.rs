@@ -169,8 +169,8 @@ pub fn input_system(
     let mut selection_targets: Vec<Entity> = Vec::new();
 
     // TODO abstract the mouse logic into another funciton
-    for (entity, mut _unit, transform, sprite, _waypoint) in &mut query.iter() {
-        let unit_pos = transform.translation();
+    for (entity, mut _unit, transform, sprite, _waypoint) in query.iter_mut() {
+        let unit_pos = transform.translation;
         match &mouse_command {
             Some(MouseCommand::SingleSelect(pos)) | Some(MouseCommand::Action(pos)) => {
                 let unit_clicked = is_position_within_sprite(pos, &unit_pos, sprite);
@@ -191,7 +191,7 @@ pub fn input_system(
         // perform selections
         Some(MouseCommand::SingleSelect(_))
         | Some(MouseCommand::DragSelect { start: _, end: _ }) => {
-            for (entity, mut unit, _transform, _sprite, _waypoint) in &mut query.iter() {
+            for (entity, mut unit, _transform, _sprite, _waypoint) in query.iter_mut() {
                 if selection_targets.contains(&entity) {
                     if state.is_toggle_select_on {
                         unit.invert_select();
@@ -224,7 +224,7 @@ pub fn input_system(
 
     // send new commands to selected units
     // is it gross iterating over the query twice in one function?
-    for (entity, unit, _transform, _sprite, mut _waypoint) in &mut query.iter() {
+    for (entity, unit, _transform, _sprite, mut _waypoint) in query.iter_mut() {
         if unit.is_selected() {
             for cmd in ui_commands.clone() {
                 unit_events.send(UnitInteractionEvent::Ui(entity, cmd));
@@ -252,20 +252,20 @@ pub fn cursor_system(
     q_camera: Query<&Transform>,
 ) {
     let camera_transform = q_camera
-        .get::<Transform>(state.camera_e)
+        .get_component::<Transform>(state.camera_e)
         .expect("Camera Pos");
 
     for ev in state.cursor.iter(&ev_cursor) {
         // get the size of the window that the event is for
         let wnd = wnds.get(ev.id).expect("Window");
-        let size = Vec2::new(wnd.width as f32, wnd.height as f32);
+        let size = Vec2::new(wnd.width() as f32, wnd.height() as f32);
 
         // the default orthographic projection is in pixels from the center;
         // just undo the translation
         let p = ev.position - size / 2.0;
 
         // apply the camera transform
-        let pos_wld = camera_transform.value().clone() * p.extend(0.0).extend(1.0);
+        let pos_wld = camera_transform.compute_matrix().clone() * p.extend(0.0).extend(1.0);
 
         *state.last_pos.x_mut() = pos_wld.x();
         *state.last_pos.y_mut() = pos_wld.y();

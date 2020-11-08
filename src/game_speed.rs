@@ -63,7 +63,7 @@ fn game_speed_update(
     mut game_time: ResMut<GameSpeed>,
     mut query: Query<(Entity, &GameSpeedRequest)>,
 ) {
-    for (entity, game_speed) in &mut query.iter() {
+    for (entity, game_speed) in query.iter() {
         match game_speed {
             GameSpeedRequest::Pause => game_time.pause(),
             GameSpeedRequest::Unpause => game_time.unpause(),

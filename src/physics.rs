@@ -57,7 +57,7 @@ pub fn unit_proximity_interaction_system(
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
 
-                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok()
+                if units.get_component::<UnitComponent>(e1).is_ok() && units.get_component::<UnitComponent>(e2).is_ok()
                 {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
@@ -82,7 +82,7 @@ pub fn unit_proximity_interaction_system(
             Proximity::Intersecting => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get::<UnitComponent>(e1).is_ok() && units.get::<UnitComponent>(e2).is_ok()
+                if units.get_component::<UnitComponent>(e1).is_ok() && units.get_component::<UnitComponent>(e2).is_ok()
                 {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
@@ -123,11 +123,11 @@ pub fn body_to_entity_system(
     mut added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
     unit_missile: Query<&MissileWeaponComponent>,
 ) {
-    for (entity, body_handle) in &mut added.iter() {
+    for (entity, body_handle) in added.iter() {
         log::debug!("new rigid body");
         bh_to_e.0.insert(body_handle.handle(), entity);
         e_to_bh.0.insert(entity, body_handle.handle());
-        let ct = match *unit_missile.get::<MissileWeaponComponent>(entity).unwrap() {
+        let ct = match *unit_missile.get_component::<MissileWeaponComponent>(entity).unwrap() {
             MissileWeaponComponent::None => ColliderType::Melee,
             _ => ColliderType::FiringRange,
         };
@@ -151,14 +151,7 @@ pub fn remove_rigid_body_system(
     for entity in query.removed::<RigidBodyHandleComponent>().iter() {
         log::debug!("removed rigid body");
         let handle = e_to_bh.0.get(entity).unwrap();
-        pipeline.remove_rigid_body(
-            *handle,
-            &mut broad_phase,
-            &mut narrow_phase,
-            &mut bodies,
-            &mut colliders,
-            &mut joints,
-        );
+        bodies.remove(handle.clone(), &mut colliders, &mut joints);
         bh_to_e.0.remove(handle);
         e_to_bh.0.remove(entity);
     }
@@ -173,7 +166,7 @@ pub fn physics_debug_system(
 ) {
     debug_timer.0.tick(time.delta_seconds);
     if debug_timer.0.finished {
-        for (entity, body_handle) in &mut query.iter() {
+        for (entity, body_handle) in query.iter() {
             let body = bodies.get_mut(body_handle.handle()).expect("body");
             log::trace!(
                 "entity {:?} at ({}, {}). sleeping: {}",
@@ -186,12 +179,12 @@ pub fn physics_debug_system(
         log::trace!("#colliders: {}", colliders.len());
         log::trace!("#bodies: {}", bodies.len());
         for (idx, collider) in colliders.iter() {
-            log::trace!(
-                "collider {:?} at ({}, {})",
-                idx,
-                collider.position().translation.x,
-                collider.position().translation.y
-            );
+            // log::trace!(
+            //     "collider {:?} at ({}, {})",
+            //     idx,
+            //     collider.position().translation.x,
+            //     collider.position().translation.y
+            // );
         }
     }
 }

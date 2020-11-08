@@ -31,11 +31,11 @@ pub struct NearbyUnitsComponent {
 fn process_unit_proximity(
     unit_id: Entity,
     target_id: Entity,
-    nearbys: &Query<&mut NearbyUnitsComponent>,
+    mut nearbys: &mut Query<&mut NearbyUnitsComponent>,
     e_or_e: EnterOrExit,
     range_type: AttackType,
 ) {
-    let mut nbs = nearbys.get_mut::<NearbyUnitsComponent>(unit_id).unwrap();
+    let mut nbs = nearbys.get_component_mut::<NearbyUnitsComponent>(unit_id).unwrap();
     let vec = if range_type == AttackType::Melee {
         &mut nbs.melee_range
     } else {
@@ -53,10 +53,10 @@ fn process_unit_proximity(
 fn process_unit_command(
     unit_id: Entity,
     cmd: UnitUiCommand,
-    units: &Query<&mut UnitComponent>,
+    mut units: &mut Query<&mut UnitComponent>,
 ) {
     use UnitUiCommand::*;
-    let mut unit = units.get_mut::<UnitComponent>(unit_id).unwrap();
+    let mut unit = units.get_component_mut::<UnitComponent>(unit_id).unwrap();
     match cmd {
         Attack(target, speed) => {
             unit.is_running = speed == UnitUiSpeedCommand::Run;
@@ -110,7 +110,7 @@ pub fn unit_event_system(
                         process_unit_proximity(
                             range_of,
                             target,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Ranged,
                         );
@@ -119,7 +119,7 @@ pub fn unit_event_system(
                         process_unit_proximity(
                             range_of,
                             target,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Ranged,
                         );
@@ -129,14 +129,14 @@ pub fn unit_event_system(
                         process_unit_proximity(
                             e1,
                             e2,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Melee,
                         );
                         process_unit_proximity(
                             e2,
                             e1,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Melee,
                         );
@@ -145,14 +145,14 @@ pub fn unit_event_system(
                         process_unit_proximity(
                             e1,
                             e2,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Melee,
                         );
                         process_unit_proximity(
                             e2,
                             e1,
-                            &nearbys,
+                            &mut nearbys,
                             contact.enter_or_exit(),
                             AttackType::Melee,
                         );
@@ -160,10 +160,10 @@ pub fn unit_event_system(
                 }
             }
             UnitInteractionEvent::Ui(entity, cmd) => {
-                process_unit_command(entity, cmd, &units);
+                process_unit_command(entity, cmd, &mut units);
             }
             UnitInteractionEvent::UnitWaypointReached(e1) => {
-                let mut unit = units.get_mut::<UnitComponent>(e1).unwrap();
+                let mut unit = units.get_component_mut::<UnitComponent>(e1).unwrap();
                 unit.current_command = UnitUserCommand::None_;
             }
             UnitInteractionEvent::UnitDied(e) => {
@@ -177,7 +177,7 @@ pub fn unit_event_system(
         }
     }
 
-    for mut unit in &mut units.iter() {
+    for mut unit in units.iter_mut() {
         for dead in dead_units.iter() {
             
             // clear actively fighting target, if there was any
@@ -197,7 +197,7 @@ pub fn unit_event_system(
         }
     }
 
-    for mut nearby in &mut nearbys.iter() {
+    for mut nearby in nearbys.iter_mut() {
         for dead in dead_units.iter() {
             nearby.melee_range.retain(|e| e != dead);
             nearby.missle_range.retain(|e| e != dead);
@@ -325,7 +325,7 @@ pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&
         return;
     }
 
-    for (mut unit, nearbys, missile) in &mut units.iter() {
+    for (mut unit, nearbys, missile) in units.iter_mut() {
 
         let new_state = calculate_next_unit_state_and_target(
             &unit.current_command,
@@ -356,13 +356,13 @@ pub fn unit_waypoint_system(
         return;
     }
 
-    for (unit, mut waypoint) in &mut unit_query.iter() {
+    for (unit, mut waypoint) in unit_query.iter_mut() {
         match &unit.current_command {
             UnitUserCommand::AttackMelee(target) | UnitUserCommand::AttackMissile(target) => {
                 let target_translation = target_query
-                    .get::<Transform>(target.clone())
+                    .get_component::<Transform>(target.clone())
                     .expect("Target translation")
-                    .translation();
+                    .translation;
                 *waypoint = WaypointComponent::Position(
                     (target_translation.x(), target_translation.y()).into(),
                 );
@@ -399,9 +399,9 @@ pub fn unit_movement_system(
     }
 
     for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
-        &mut unit_query.iter()
+        unit_query.iter_mut()
     {
-        let translation = transform.translation_mut();
+        let translation = transform.translation;
 
         // TODO remove transform here, use rigid body pos
         let unit_pos: XyPos = (translation.x(), translation.y()).into();

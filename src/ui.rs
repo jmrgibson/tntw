@@ -37,62 +37,62 @@ pub fn unit_display_system(
         &mut Handle<ColorMaterial>,
         &Children,
     )>,
-    icon_query: Query<&mut Handle<ColorMaterial>>,
-    sprite_query: Query<&mut Sprite>,
-    transform_query: Query<&mut Transform>,
+    mut icon_query: Query<&mut Handle<ColorMaterial>>,
+    mut sprite_query: Query<&mut Sprite>,
+    mut transform_query: Query<&mut Transform>,
 ) {
-    for (unit, health, mut material, children) in &mut unit_query.iter() {
+    for (unit, health, mut material, children) in unit_query.iter_mut() {
         // state icon
         {
             let mut state_icon = icon_query
-                .get_mut::<Handle<ColorMaterial>>(children[0])
+                .get_component_mut::<Handle<ColorMaterial>>(children[0])
                 .unwrap();
             *state_icon = match unit.ui_state() {
-                UnitUiState::MovingSlow => icon_materials.moving,
-                UnitUiState::MovingFast => icon_materials.moving_fast,
-                UnitUiState::Melee => icon_materials.melee,
-                UnitUiState::Firing => icon_materials.firing,
-                _ => icon_materials.idle,
+                UnitUiState::MovingSlow => icon_materials.moving.clone_weak(),
+                UnitUiState::MovingFast => icon_materials.moving_fast.clone_weak(),
+                UnitUiState::Melee => icon_materials.melee.clone_weak(),
+                UnitUiState::Firing => icon_materials.firing.clone_weak(),
+                _ => icon_materials.idle.clone_weak(),
             };
         }
 
         // selection status
         {
             *material = if unit.is_selected() {
-                selection_materials.selected
+                selection_materials.selected.clone_weak()
             } else {
-                selection_materials.normal
+                selection_materials.normal.clone_weak()
             };
         }
 
         // healthbar
         {
             // shrink healthbar, first get background as reference
-            let max_width = { sprite_query.get::<Sprite>(children[1]).unwrap().size.x() };
+            let max_width = { sprite_query.get_component::<Sprite>(children[1]).unwrap().size.x() };
             let left_anchor = {
                 transform_query
-                    .get::<Transform>(children[1])
+                    .get_component::<Transform>(children[1])
                     .unwrap()
-                    .translation()
+                    .translation
                     .x()
                     - (max_width / 2.0)
             };
 
             // then update actual healtbar
-            let mut foreground = sprite_query.get_mut::<Sprite>(children[2]).unwrap();
+            let mut foreground = sprite_query.get_component_mut::<Sprite>(children[2]).unwrap();
 
             let bar_size = max_width * health.ratio();
             foreground.size.set_x(bar_size);
 
             transform_query
-                .get_mut::<Transform>(children[2])
+                .get_component_mut::<Transform>(children[2])
                 .unwrap()
-                .translation_mut()
+                .translation
                 .set_x(left_anchor + bar_size / 2.0);
 
             // update color
             let mut healthbar = icon_query
-                .get_mut::<Handle<ColorMaterial>>(children[2])
+                .get_component_mut::<Handle<ColorMaterial>>(children[2])
                 .unwrap();
             *healthbar = healthbar_materials.from_ratio(health.ratio());
         }
@@ -129,11 +129,11 @@ impl FromResources for HeathBarMaterials {
 impl HeathBarMaterials {
     pub fn from_ratio(&self, health_ratio: f32) -> Handle<ColorMaterial> {
         if health_ratio >= 0.75 {
-            self.high
+            self.high.clone_weak()
         } else if health_ratio >= 0.25 {
-            self.medium
+            self.medium.clone_weak()
         } else {
-            self.low
+            self.low.clone_weak()
         }
     }
 }

@@ -11,17 +11,17 @@ pub fn unit_melee_system(
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
     mut unit_query: Query<(&UnitComponent, &CombatComponent)>,
-    health_query: Query<&mut HealthComponent>,
+    mut health_query: Query<&mut HealthComponent>,
     target_query: Query<&CombatComponent>
 ) {
     if game_speed.is_paused() {
         return;
     }
     
-    for (unit, source) in &mut unit_query.iter() {
+    for (unit, source) in unit_query.iter() {
         if let UnitState::Melee(Some(target)) = unit.state {
-            let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
-            let target_combat = target_query.get::<CombatComponent>(target).unwrap();
+            let mut target_heath = health_query.get_component_mut::<HealthComponent>(target).unwrap();
+            let target_combat = target_query.get_component::<CombatComponent>(target).unwrap();
             if calc_melee_hit(source, &target_combat) {
                 target_heath.current_health -= calc_damage(source, &target_combat);
             
@@ -38,21 +38,21 @@ pub fn unit_missile_system(
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
     mut unit_query: Query<(&UnitComponent, &CombatComponent, &mut MissileWeaponComponent)>,
-    health_query: Query<&mut HealthComponent>,
+    mut health_query: Query<&mut HealthComponent>,
     target_query: Query<&CombatComponent>,
 ) {
     if game_speed.is_paused() {
         return;
     }
     
-    for (unit, source, mut missile) in &mut unit_query.iter() {
+    for (unit, source, mut missile) in unit_query.iter_mut() {
         if let UnitState::Firing(Some(target)) | UnitState::FiringAndMoving(Some(target)) = unit.state {
             debug_assert!(missile.is_missile_attack_available());
 
             missile.use_ammo();
 
-            let mut target_heath = health_query.get_mut::<HealthComponent>(target).unwrap();
-            let target_combat = target_query.get::<CombatComponent>(target).unwrap();
+            let mut target_heath = health_query.get_component_mut::<HealthComponent>(target).unwrap();
+            let target_combat = target_query.get_component::<CombatComponent>(target).unwrap();
             target_heath.current_health -= calc_damage(source, &target_combat);
 
             if target_heath.current_health < 0.0 {

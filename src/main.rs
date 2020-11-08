@@ -28,7 +28,7 @@ use tntw::*;
 fn main() {
     env_logger::init();
     App::build()
-        .add_default_plugins()
+        .add_plugins(DefaultPlugins)
         .add_plugin(RapierPhysicsPlugin)
         .add_plugin(RapierRenderPlugin) // for debugging
         .add_plugin(tntw::game_speed::GameSpeedPlugin) // for debugging
@@ -79,28 +79,24 @@ fn setup(
         idle: materials.add(
             asset_server
                 .load("assets/textures/idle.png")
-                .unwrap()
                 .into(),
         ),
         moving: materials.add(
             asset_server
                 .load("assets/textures/move.png")
-                .unwrap()
                 .into(),
         ),
         moving_fast: materials.add(
             asset_server
                 .load("assets/textures/move_fast.png")
-                .unwrap()
                 .into(),
         ),
         melee: materials.add(
             asset_server
                 .load("assets/textures/swords.png")
-                .unwrap()
                 .into(),
         ),
-        firing: materials.add(asset_server.load("assets/textures/bow.png").unwrap().into()), // UPDATED
+        firing: materials.add(asset_server.load("assets/textures/bow.png").into()), // UPDATED
     });
 
     // Add the game's entities to our world
@@ -140,7 +136,7 @@ fn setup(
 
         commands
             .spawn(SpriteComponents {
-                material: selection_materials.normal.into(),
+                material: selection_materials.normal.clone_weak().into(),
                 transform: Transform::from_translation(Vec3::new(x, y, 1.0)),
                 sprite: Sprite::new(Vec2::new(unit_size, unit_size)),
                 ..Default::default()
@@ -155,14 +151,14 @@ fn setup(
             // ui state icon
             .with_children(|parent| {
                 parent.spawn(SpriteComponents {
-                    material: selection_materials.normal.into(),
-                    transform: Transform::from_translation(Vec3::new(
+                    sprite: Sprite::new(Vec2::new(state_icon_size, state_icon_size)),
+                    material: selection_materials.normal.clone_weak().into(),
+                    global_transform: GlobalTransform::from_translation(Vec3::new(
                         (unit_size / 2.0) + (state_icon_size / 2.0) + 5.0,
                         (unit_size / 2.0) - (state_icon_size / 2.0),
                         0.0,
-                    ))
-                    .with_scale(ui::ICON_SCALE),
-                    sprite: Sprite::new(Vec2::new(state_icon_size, state_icon_size)),
+                    )),
+                    // .apply_non_uniform_scale(Vec3::new(ui::ICON_SCALE, ui::ICON_SCALE, ui::ICON_SCALE)),
                     ..Default::default()
                 });
             })
@@ -173,14 +169,14 @@ fn setup(
 
                 // background
                 parent.spawn(SpriteComponents {
-                    material: healthbar_materials.background.into(),
+                    material: healthbar_materials.background.clone_weak().into(),
                     transform: Transform::from_translation(Vec3::new(xpos, ypos, 1.0)),
                     sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
                     ..Default::default()
                 });
                 // foreground
                 parent.spawn(SpriteComponents {
-                    material: healthbar_materials.high.into(),
+                    material: healthbar_materials.high.clone_weak().into(),
                     transform: Transform::from_translation(Vec3::new(xpos, ypos, 2.0)),
                     sprite: Sprite::new(Vec2::new(unit_size, 5.0)),
                     ..Default::default()
