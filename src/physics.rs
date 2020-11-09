@@ -120,7 +120,7 @@ pub fn body_to_entity_system(
     mut bh_to_e: ResMut<BodyHandleToEntity>,
     mut e_to_bh: ResMut<EntityToBodyHandle>,
     mut e_to_ct: ResMut<EntityToColliderType>,
-    mut added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
+    added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
     unit_missile: Query<&MissileWeaponComponent>,
 ) {
     for (entity, body_handle) in added.iter() {
@@ -138,9 +138,9 @@ pub fn body_to_entity_system(
 /// Detects when a RigidBodyHandle is removed from an entity, as it despawns
 /// And inform rapier about the removal
 pub fn remove_rigid_body_system(
-    mut pipeline: ResMut<PhysicsPipeline>,
-    mut broad_phase: ResMut<BroadPhase>,
-    mut narrow_phase: ResMut<NarrowPhase>,
+    _pipeline: ResMut<PhysicsPipeline>,
+    _broad_phase: ResMut<BroadPhase>,
+    _narrow_phase: ResMut<NarrowPhase>,
     mut bodies: ResMut<RigidBodySet>,
     mut colliders: ResMut<ColliderSet>,
     mut joints: ResMut<JointSet>,
@@ -162,7 +162,7 @@ pub fn physics_debug_system(
     mut debug_timer: ResMut<DebugTimer>,
     mut bodies: ResMut<RigidBodySet>,
     colliders: ResMut<ColliderSet>,
-    mut query: Query<(Entity, &RigidBodyHandleComponent)>,
+    query: Query<(Entity, &RigidBodyHandleComponent)>,
 ) {
     debug_timer.0.tick(time.delta_seconds);
     if debug_timer.0.finished {
@@ -178,7 +178,7 @@ pub fn physics_debug_system(
         }
         log::trace!("#colliders: {}", colliders.len());
         log::trace!("#bodies: {}", bodies.len());
-        for (idx, collider) in colliders.iter() {
+        for (_idx, _collider) in colliders.iter() {
             // log::trace!(
             //     "collider {:?} at ({}, {})",
             //     idx,

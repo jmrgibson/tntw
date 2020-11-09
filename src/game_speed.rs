@@ -61,7 +61,7 @@ impl Plugin for GameSpeedPlugin {
 fn game_speed_update(
     mut commands: Commands,
     mut game_time: ResMut<GameSpeed>,
-    mut query: Query<(Entity, &GameSpeedRequest)>,
+    query: Query<(Entity, &GameSpeedRequest)>,
 ) {
     for (entity, game_speed) in query.iter() {
         match game_speed {

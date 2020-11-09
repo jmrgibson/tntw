@@ -31,7 +31,7 @@ pub struct NearbyUnitsComponent {
 fn process_unit_proximity(
     unit_id: Entity,
     target_id: Entity,
-    mut nearbys: &mut Query<&mut NearbyUnitsComponent>,
+    nearbys: &mut Query<&mut NearbyUnitsComponent>,
     e_or_e: EnterOrExit,
     range_type: AttackType,
 ) {
@@ -53,7 +53,7 @@ fn process_unit_proximity(
 fn process_unit_command(
     unit_id: Entity,
     cmd: UnitUiCommand,
-    mut units: &mut Query<&mut UnitComponent>,
+    units: &mut Query<&mut UnitComponent>,
 ) {
     use UnitUiCommand::*;
     let mut unit = units.get_component_mut::<UnitComponent>(unit_id).unwrap();
@@ -398,7 +398,7 @@ pub fn unit_movement_system(
         return;
     }
 
-    for (entity, unit, mut transform, body_handle, collider_handle, waypoint) in
+    for (entity, unit, transform, body_handle, collider_handle, waypoint) in
         unit_query.iter_mut()
     {
         let translation = transform.translation;

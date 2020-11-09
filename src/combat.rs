@@ -10,7 +10,7 @@ use crate::*;
 pub fn unit_melee_system(
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     game_speed: Res<GameSpeed>,
-    mut unit_query: Query<(&UnitComponent, &CombatComponent)>,
+    unit_query: Query<(&UnitComponent, &CombatComponent)>,
     mut health_query: Query<&mut HealthComponent>,
     target_query: Query<&CombatComponent>
 ) {

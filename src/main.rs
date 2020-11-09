@@ -3,19 +3,17 @@
 
 use std::collections::HashMap;
 
-
 use bevy::{prelude::*, render::pass::ClearColor};
-
 
 use bevy_rapier2d::physics::{
     ColliderHandleComponent, RapierPhysicsPlugin, RigidBodyHandleComponent,
 };
-use bevy_rapier2d::rapier::dynamics::{RigidBodyBuilder};
-use bevy_rapier2d::rapier::geometry::{ColliderBuilder};
+use bevy_rapier2d::rapier::dynamics::RigidBodyBuilder;
+use bevy_rapier2d::rapier::geometry::ColliderBuilder;
 
 use bevy_rapier2d::render::RapierRenderPlugin;
 
-use itertools::Itertools;
+
 
 use tntw::combat::*;
 use tntw::physics::*;
@@ -42,12 +40,10 @@ fn main() {
         .init_resource::<ui::HeathBarMaterials>()
         .init_resource::<TeamsResource>()
         .add_event::<UnitInteractionEvent>()
-
         .add_startup_system(setup.system())
         .add_system(bevy::input::system::exit_on_esc_system.system())
         .add_system(user_input::cursor_system.system())
         .add_system(user_input::input_system.system())
-
         .add_system(unit_event_system.system())
         .add_system(unit_state_machine_system.system())
         .add_system(unit_waypoint_system.system())
@@ -55,11 +51,11 @@ fn main() {
         .add_system(body_to_entity_system.system())
         .add_system(remove_rigid_body_system.system())
         .add_system(physics_debug_system.system())
-        
         .add_system(unit_melee_system.system())
         .add_system(unit_missile_system.system())
-        
-        .add_system(ui::unit_display_system.system())
+        .add_system(ui::state_icon_system.system())
+        .add_system(ui::selection_system.system())
+        .add_system(ui::healthbar_system.system())
         .add_system_to_stage(
             stage::POST_UPDATE,
             unit_proximity_interaction_system.system(),
@@ -76,26 +72,10 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     commands.insert_resource(ui::UiStateMaterials {
-        idle: materials.add(
-            asset_server
-                .load("textures/idle.png")
-                .into(),
-        ),
-        moving: materials.add(
-            asset_server
-                .load("textures/move.png")
-                .into(),
-        ),
-        moving_fast: materials.add(
-            asset_server
-                .load("textures/move_fast.png")
-                .into(),
-        ),
-        melee: materials.add(
-            asset_server
-                .load("textures/swords.png")
-                .into(),
-        ),
+        idle: materials.add(asset_server.load("textures/idle.png").into()),
+        moving: materials.add(asset_server.load("textures/move.png").into()),
+        moving_fast: materials.add(asset_server.load("textures/move_fast.png").into()),
+        melee: materials.add(asset_server.load("textures/swords.png").into()),
         firing: materials.add(asset_server.load("assets/textures/bow.png").into()), // UPDATED
     });
 
