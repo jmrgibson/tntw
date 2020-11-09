@@ -78,22 +78,22 @@ fn setup(
     commands.insert_resource(ui::UiStateMaterials {
         idle: materials.add(
             asset_server
-                .load("assets/textures/idle.png")
+                .load("textures/idle.png")
                 .into(),
         ),
         moving: materials.add(
             asset_server
-                .load("assets/textures/move.png")
+                .load("textures/move.png")
                 .into(),
         ),
         moving_fast: materials.add(
             asset_server
-                .load("assets/textures/move_fast.png")
+                .load("textures/move_fast.png")
                 .into(),
         ),
         melee: materials.add(
             asset_server
-                .load("assets/textures/swords.png")
+                .load("textures/swords.png")
                 .into(),
         ),
         firing: materials.add(asset_server.load("assets/textures/bow.png").into()), // UPDATED

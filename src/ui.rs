@@ -31,40 +31,50 @@ pub fn unit_display_system(
     selection_materials: Res<SelectionMaterials>,
     healthbar_materials: Res<HeathBarMaterials>,
     icon_materials: Res<UiStateMaterials>,
-    mut unit_query: Query<(
-        &UnitComponent,
-        &HealthComponent,
-        &mut Handle<ColorMaterial>,
-        &Children,
+    mut unit_query: QuerySet<(
+        Query<(
+            &UnitComponent,
+            // &HealthComponent,
+            // &Handle<ColorMaterial>,
+            &Children,
+        )>,
+        Query<&mut Handle<ColorMaterial>>,
+        Query<(
+            &HealthComponent,
+            &Children
+        )>,
     )>,
-    mut icon_query: Query<&mut Handle<ColorMaterial>>,
+    // mut icon_query: Query<&mut Handle<ColorMaterial>>,
     mut sprite_query: Query<&mut Sprite>,
     mut transform_query: Query<&mut Transform>,
 ) {
-    for (unit, health, mut material, children) in unit_query.iter_mut() {
-        // state icon
-        {
-            let mut state_icon = icon_query
-                .get_component_mut::<Handle<ColorMaterial>>(children[0])
-                .unwrap();
-            *state_icon = match unit.ui_state() {
-                UnitUiState::MovingSlow => icon_materials.moving.clone_weak(),
-                UnitUiState::MovingFast => icon_materials.moving_fast.clone_weak(),
-                UnitUiState::Melee => icon_materials.melee.clone_weak(),
-                UnitUiState::Firing => icon_materials.firing.clone_weak(),
-                _ => icon_materials.idle.clone_weak(),
-            };
-        }
+    // for (unit, children) in unit_query.q0().iter() {
+    //     // state icon
+    //     {
+    //         let mut state_icon = unit_query
+    //             .q1_mut()
+    //             .get_component_mut::<Handle<ColorMaterial>>(children[0])
+    //             .unwrap();
+    //         *state_icon = match unit.ui_state() {
+    //             UnitUiState::MovingSlow => icon_materials.moving.clone(),
+    //             UnitUiState::MovingFast => icon_materials.moving_fast.clone(),
+    //             UnitUiState::Melee => icon_materials.melee.clone(),
+    //             UnitUiState::Firing => icon_materials.firing.clone(),
+    //             _ => icon_materials.idle.clone(),
+    //         };
+    //     }
+    // }
 
-        // selection status
-        {
-            *material = if unit.is_selected() {
-                selection_materials.selected.clone_weak()
-            } else {
-                selection_materials.normal.clone_weak()
-            };
-        }
+    //     // selection status
+    //     {
+    //         *material = if unit.is_selected() {
+    //             selection_materials.selected.clone()
+    //         } else {
+    //             selection_materials.normal.clone()
+    //         };
+    //     }
 
+    for (health, children) in unit_query.q2_mut().iter_mut() {
         // healthbar
         {
             // shrink healthbar, first get background as reference
@@ -91,7 +101,8 @@ pub fn unit_display_system(
                 .set_x(left_anchor + bar_size / 2.0);
 
             // update color
-            let mut healthbar = icon_query
+            let mut healthbar = unit_query
+                .q1_mut()
                 .get_component_mut::<Handle<ColorMaterial>>(children[2])
                 .unwrap();
             *healthbar = healthbar_materials.from_ratio(health.ratio());
@@ -129,11 +140,11 @@ impl FromResources for HeathBarMaterials {
 impl HeathBarMaterials {
     pub fn from_ratio(&self, health_ratio: f32) -> Handle<ColorMaterial> {
         if health_ratio >= 0.75 {
-            self.high.clone_weak()
+            self.high.clone()
         } else if health_ratio >= 0.25 {
-            self.medium.clone_weak()
+            self.medium.clone()
         } else {
-            self.low.clone_weak()
+            self.low.clone()
         }
     }
 }
