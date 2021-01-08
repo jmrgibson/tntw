@@ -51,10 +51,10 @@ pub struct GameSpeedPlugin;
 
 impl Plugin for GameSpeedPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.init_resource::<GameSpeed>()
-            .add_stage_before("update", "game_timer")
-            .add_system_to_stage("game_timer", game_speed_update.system())
-            .add_system_to_stage("game_timer", game_timer.system());
+        // app.init_resource::<GameSpeed>()
+        //     .add_stage_before("update", "game_timer")
+        //     .add_system_to_stage("game_timer", game_speed_update.system())
+        //     .add_system_to_stage("game_timer", game_timer.system());
     }
 }
 
@@ -78,7 +78,7 @@ fn game_speed_update(
 }
 
 fn game_timer(time: Res<Time>, mut game_time: ResMut<GameSpeed>) {
-    game_time.delta = time.delta_seconds * game_time.game_speed;
+    game_time.delta = time.delta_seconds() * game_time.game_speed;
 
     if game_time.delta < 0.01 {
         return;

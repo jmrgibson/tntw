@@ -1,16 +1,9 @@
+use bevy::prelude::*;
 
-
-
-use bevy::{prelude::*};
-
-
-use bevy_rapier2d::physics::{
-    ColliderHandleComponent, RigidBodyHandleComponent,
-};
-use bevy_rapier2d::rapier::dynamics::{RigidBodySet};
-use bevy_rapier2d::rapier::geometry::{ColliderSet};
+use bevy_rapier2d::physics::{ColliderHandleComponent, RigidBodyHandleComponent};
+use bevy_rapier2d::rapier::dynamics::RigidBodySet;
+use bevy_rapier2d::rapier::geometry::ColliderSet;
 use bevy_rapier2d::rapier::math::Isometry;
-
 
 use crate::physics::*;
 
@@ -24,7 +17,6 @@ pub struct NearbyUnitsComponent {
     missle_range: Vec<Entity>,
 }
 
-
 /// helper function
 /// this processes interactions one unit at a time within its own scope
 /// so we don't double-borrow the Unit Component
@@ -35,13 +27,15 @@ fn process_unit_proximity(
     e_or_e: EnterOrExit,
     range_type: AttackType,
 ) {
-    let mut nbs = nearbys.get_component_mut::<NearbyUnitsComponent>(unit_id).unwrap();
+    let mut nbs = nearbys
+        .get_component_mut::<NearbyUnitsComponent>(unit_id)
+        .unwrap();
     let vec = if range_type == AttackType::Melee {
         &mut nbs.melee_range
     } else {
         &mut nbs.missle_range
     };
-    
+
     if e_or_e == EnterOrExit::Enter {
         vec.push(target_id);
     } else {
@@ -79,7 +73,6 @@ fn process_unit_command(
     }
     log::debug!("unit current command: {:?}", unit.current_command);
 }
-
 
 /// handles events that changes the commands and state for each unit.
 /// processes the following inputs:
@@ -169,29 +162,27 @@ pub fn unit_event_system(
             UnitInteractionEvent::UnitDied(e) => {
                 // the e here is the unit that died, but we also need to cancel existing attack commands
                 // for this unit. We could maybe do a reverse lookup? but for now just store and iterate
-                // over all units to find ones 
+                // over all units to find ones
                 dead_units.push(e);
-
             }
-
         }
     }
 
     for mut unit in units.iter_mut() {
         for dead in dead_units.iter() {
-            
             // clear actively fighting target, if there was any
             if let Some(target) = &unit.state.current_actively_fighting() {
                 if dead == target {
                     unit.state.clear_target();
                 }
             }
-            
+
             // clear current command if it was on the dead unit
-            if let UnitUserCommand::AttackMelee(target) | UnitUserCommand::AttackMissile(target) = &unit.current_command {
+            if let UnitUserCommand::AttackMelee(target) | UnitUserCommand::AttackMissile(target) =
+                &unit.current_command
+            {
                 if dead == target {
                     unit.current_command = UnitUserCommand::None_;
-
                 }
             }
         }
@@ -229,15 +220,11 @@ pub fn calculate_next_unit_state_and_target(
     fire_at_will_enabled: bool,
     missile_attack_available: bool,
     can_fire_while_moving: bool,
-    currently_fighting: Option<Entity>
+    currently_fighting: Option<Entity>,
 ) -> UnitState {
-    let next_melee_target = || {
-        pick_melee_target(enemies_within_melee_range)
-    };
+    let next_melee_target = || pick_melee_target(enemies_within_melee_range);
 
-    let next_missile_target = || {
-        pick_missile_target(enemies_within_missile_range)
-    };
+    let next_missile_target = || pick_missile_target(enemies_within_missile_range);
 
     match current_command {
         UnitUserCommand::AttackMelee(cmd_target) => {
@@ -269,9 +256,9 @@ pub fn calculate_next_unit_state_and_target(
             } else if enemies_within_missile_range.contains(&cmd_target) {
                 // prioritize user-given target
                 UnitState::Firing(Some(cmd_target.clone()))
-            } else {  
+            } else {
                 // target is not within missle range
-                if guard_mode_enabled {  
+                if guard_mode_enabled {
                     // guard mode, don't move
                     let next_target = next_missile_target();
                     if fire_at_will_enabled && next_target.is_some() {
@@ -297,7 +284,8 @@ pub fn calculate_next_unit_state_and_target(
             let missile_target = next_missile_target();
             if melee_target.is_some() {
                 UnitState::Melee(melee_target)
-            } else if can_fire_while_moving && missile_attack_available && missile_target.is_some() {
+            } else if can_fire_while_moving && missile_attack_available && missile_target.is_some()
+            {
                 UnitState::FiringAndMoving(missile_target)
             } else {
                 UnitState::Moving
@@ -320,13 +308,19 @@ pub fn calculate_next_unit_state_and_target(
 }
 
 /// Updates each units state machine
-pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&mut UnitComponent, &NearbyUnitsComponent, &MissileWeaponComponent)>) {
+pub fn unit_state_machine_system(
+    game_speed: Res<GameSpeed>,
+    mut units: Query<(
+        &mut UnitComponent,
+        &NearbyUnitsComponent,
+        &MissileWeaponComponent,
+    )>,
+) {
     if game_speed.is_paused() {
         return;
     }
 
     for (mut unit, nearbys, missile) in units.iter_mut() {
-
         let new_state = calculate_next_unit_state_and_target(
             &unit.current_command,
             &nearbys.melee_range,
@@ -339,7 +333,12 @@ pub fn unit_state_machine_system(game_speed: Res<GameSpeed>, mut units: Query<(&
         );
 
         if unit.state != new_state {
-            log::debug!("Unit state transition {:?}->{:?} with command {:?}", unit.state, new_state, unit.current_command);
+            log::debug!(
+                "Unit state transition {:?}->{:?} with command {:?}",
+                unit.state,
+                new_state,
+                unit.current_command
+            );
         }
 
         unit.state = new_state;
@@ -364,7 +363,7 @@ pub fn unit_waypoint_system(
                     .expect("Target translation")
                     .translation;
                 *waypoint = WaypointComponent::Position(
-                    (target_translation.x(), target_translation.y()).into(),
+                    (target_translation.x, target_translation.y).into(),
                 );
             }
             UnitUserCommand::Move(wp) => {
@@ -398,13 +397,11 @@ pub fn unit_movement_system(
         return;
     }
 
-    for (entity, unit, transform, body_handle, collider_handle, waypoint) in
-        unit_query.iter_mut()
-    {
+    for (entity, unit, transform, body_handle, collider_handle, waypoint) in unit_query.iter_mut() {
         let translation = transform.translation;
 
         // TODO remove transform here, use rigid body pos
-        let unit_pos: XyPos = (translation.x(), translation.y()).into();
+        let unit_pos: XyPos = (translation.x, translation.y).into();
 
         let mut body = bodies.get_mut(body_handle.handle()).expect("body");
         let collider = colliders
@@ -434,7 +431,7 @@ pub fn unit_movement_system(
             } {
                 let relative_position = dest.clone() - unit_pos;
 
-                let unit_distance = unit.current_speed() * time.delta_seconds;
+                let unit_distance = unit.current_speed() * time.delta_seconds();
 
                 // using length_squared() for totally premature optimization
                 let rel_distance_sq = relative_position.length_squared();
@@ -446,20 +443,18 @@ pub fn unit_movement_system(
 
                     // move body
                     let pos = Isometry::translation(
-                        body.position.translation.vector.x + (direction.x() * unit_distance),
-                        body.position.translation.vector.y + (direction.y() * unit_distance),
+                        body.position().translation.vector.x + (direction.x * unit_distance),
+                        body.position().translation.vector.y + (direction.y * unit_distance),
                     );
 
-                    body.set_position(pos);
+                    body.set_position(pos, true);
                     collider.set_position_debug(pos);
                 } else {
                     // can reach destination, set position to waypoint, transition to idle
-                    let pos = Isometry::translation(dest.x(), dest.y());
-                    body.set_position(pos);
+                    let pos = Isometry::translation(dest.x, dest.y);
+                    body.set_position(pos, true);
                     collider.set_position_debug(pos);
-                    unit_events.send(UnitInteractionEvent::UnitWaypointReached(
-                        entity
-                    ));
+                    unit_events.send(UnitInteractionEvent::UnitWaypointReached(entity));
                 }
             }
         }

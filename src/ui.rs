@@ -59,14 +59,14 @@ pub fn healthbar_system(
                 .get_component::<Sprite>(children[1])
                 .unwrap()
                 .size
-                .x()
+                .x
         };
         let left_anchor = {
             transform_query
                 .get_component::<Transform>(children[1])
                 .unwrap()
                 .translation
-                .x()
+                .x
                 - (max_width / 2.0)
         };
 
@@ -76,13 +76,13 @@ pub fn healthbar_system(
             .unwrap();
 
         let bar_size = max_width * health.ratio();
-        foreground.size.set_x(bar_size);
+        foreground.size.x = bar_size;
 
         transform_query
             .get_component_mut::<Transform>(children[2])
             .unwrap()
             .translation
-            .set_x(left_anchor + bar_size / 2.0);
+            .x = left_anchor + bar_size / 2.0;
 
         // update color
         if let Ok(mut healthbar) = icon_query.get_mut(children[2]) {

@@ -1,16 +1,16 @@
 [package]
-name = "tntw"
-version = "0.1.0"
 authors = ["Joel Gibson <jmr.gibson@gmail.com>"]
 edition = "2018"
+name = "tntw"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.3.0" 
-bevy_input = "0.3.0"
-bevy_rapier2d = "0.5.0"
+bevy = "0.4.0"
+bevy_input = "0.4.0"
+bevy_rapier2d = "0.7.0"
 env_logger = "0.7"
 itertools = "0.9"
-log = "0.4" 
+log = "0.4"
 rand = "0.7"

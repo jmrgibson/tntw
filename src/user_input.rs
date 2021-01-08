@@ -1,16 +1,8 @@
-
 use std::time::{Duration, Instant};
 
-use bevy::{prelude::*};
+use bevy::prelude::*;
 use bevy_input::keyboard::*;
 use bevy_input::mouse::*;
-
-
-
-
-
-
-
 
 use crate::*;
 
@@ -143,8 +135,8 @@ pub fn input_system(
                     log::debug!("drag select");
 
                     // TODO replace with proper AABB overlap
-                    if (start.x() - mouse_position.x()).abs() > DRAG_SELECT_MIN_BOX
-                        && (start.y() - mouse_position.y()).abs() > DRAG_SELECT_MIN_BOX
+                    if (start.x - mouse_position.x).abs() > DRAG_SELECT_MIN_BOX
+                        && (start.y - mouse_position.y).abs() > DRAG_SELECT_MIN_BOX
                     {
                         mouse_command.replace(MouseCommand::DragSelect {
                             start,
@@ -267,8 +259,8 @@ pub fn cursor_system(
         // apply the camera transform
         let pos_wld = camera_transform.compute_matrix().clone() * p.extend(0.0).extend(1.0);
 
-        *state.last_pos.x_mut() = pos_wld.x();
-        *state.last_pos.y_mut() = pos_wld.y();
+        state.last_pos.x = pos_wld.x;
+        state.last_pos.y = pos_wld.y;
     }
 }
 
@@ -279,23 +271,23 @@ fn is_position_within_sprite(
     sprite_position: &Vec3,
     sprite: &Sprite,
 ) -> bool {
-    position_to_check.x() < (sprite_position.x() + sprite.size.x())
-        && position_to_check.x() > (sprite_position.x() - sprite.size.x())
-        && position_to_check.y() < (sprite_position.y() + sprite.size.y())
-        && position_to_check.y() > (sprite_position.y() - sprite.size.y())
+    position_to_check.x < (sprite_position.x + sprite.size.x)
+        && position_to_check.x > (sprite_position.x - sprite.size.x)
+        && position_to_check.y < (sprite_position.y + sprite.size.y)
+        && position_to_check.y > (sprite_position.y - sprite.size.y)
 }
 
 /// TODO  also fairly gross
 fn is_translation_within_box(position_to_check: &Vec3, corner: &Vec2, end: &Vec2) -> bool {
-    let in_x = if end.x() - corner.x() > 0.0 {
-        corner.x() < position_to_check.x() && position_to_check.x() < end.x()
+    let in_x = if end.x - corner.x > 0.0 {
+        corner.x < position_to_check.x && position_to_check.x < end.x
     } else {
-        corner.x() > position_to_check.x() && position_to_check.x() > end.x()
+        corner.x > position_to_check.x && position_to_check.x > end.x
     };
-    let in_y = if end.y() - corner.y() > 0.0 {
-        corner.y() < position_to_check.y() && position_to_check.y() < end.y()
+    let in_y = if end.y - corner.y > 0.0 {
+        corner.y < position_to_check.y && position_to_check.y < end.y
     } else {
-        corner.y() > position_to_check.y() && position_to_check.y() > end.y()
+        corner.y > position_to_check.y && position_to_check.y > end.y
     };
     in_x && in_y
 }

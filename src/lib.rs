@@ -1,4 +1,5 @@
 #![deny(unreachable_patterns)]
+#![feature(const_fn)]
 use bevy::prelude::*;
 
 use crate::game_speed::{GameSpeed, GameSpeedRequest};
@@ -128,7 +129,7 @@ pub enum UnitUserCommand {
 pub enum UnitState {
     Idle,
     /// optional entity is the unit it is fighting.
-    /// is Some if target is still alive, None if target died 
+    /// is Some if target is still alive, None if target died
     Firing(Option<Entity>),
     /// Damn horse archers complicating things
     FiringAndMoving(Option<Entity>),
@@ -137,7 +138,7 @@ pub enum UnitState {
 }
 
 impl UnitState {
-    /// is Some if target is still alive, None if target died 
+    /// is Some if target is still alive, None if target died
     pub fn current_actively_fighting(&self) -> Option<Entity> {
         if let UnitState::Melee(e) | UnitState::Firing(e) | UnitState::FiringAndMoving(e) = self {
             e.map(|e| e.clone())
@@ -220,8 +221,11 @@ impl UnitComponent {
         }
     }
 
-    pub fn default_from_type(unit_type: UnitType, player_id: PlayerId) -> (UnitComponent, MissileWeaponComponent) {
-        let unit  = match unit_type {
+    pub fn default_from_type(
+        unit_type: UnitType,
+        player_id: PlayerId,
+    ) -> (UnitComponent, MissileWeaponComponent) {
+        let unit = match unit_type {
             UnitType::MeleeInfantry => UnitComponent {
                 max_speed: 50.0,
                 unit_type,
@@ -238,13 +242,14 @@ impl UnitComponent {
         };
 
         let missile = match unit_type {
-            UnitType::MissileInfantry | UnitType::MissileCalvary => { MissileWeaponComponent::Primary(MissileStats {
+            UnitType::MissileInfantry | UnitType::MissileCalvary => {
+                MissileWeaponComponent::Primary(MissileStats {
                     max_ammunition: 500,
                     current_ammunition: 500,
                     range: 100.0,
                     type_: MissileType::Bow,
                 })
-            },
+            }
             _ => MissileWeaponComponent::None,
         };
 
@@ -324,7 +329,7 @@ impl Default for CombatComponent {
             melee_attack: 30.0,
             melee_defence: 30.0,
             normal_damage: 25.0,
-        } 
+        }
     }
 }
 

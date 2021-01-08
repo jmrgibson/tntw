@@ -35,6 +35,7 @@ pub enum ContactType {
 pub fn unit_proximity_interaction_system(
     bh_to_e: Res<BodyHandleToEntity>,
     e_to_ct: Res<EntityToColliderType>,
+    bodies: ResMut<RigidBodySet>,
     events: Res<EventQueue>,
     mut unit_events: ResMut<Events<UnitInteractionEvent>>,
     units: Query<&UnitComponent>,
@@ -54,10 +55,13 @@ pub fn unit_proximity_interaction_system(
         // new_status is guaranteed to be != prev_status
         match prox_event.new_status {
             Proximity::Disjoint => {
-                let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
-                let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
+                let b1 = bodies.get(prox_event.collider1).unwrap();
+                let b2 = bodies.get(prox_event.collider2).unwrap();
+                let e1 = Entity::from_bits(b1.user_data as u64);
+                let e2 = Entity::from_bits(b2.user_data as u64);
 
-                if units.get_component::<UnitComponent>(e1).is_ok() && units.get_component::<UnitComponent>(e2).is_ok()
+                if units.get_component::<UnitComponent>(e1).is_ok()
+                    && units.get_component::<UnitComponent>(e2).is_ok()
                 {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
@@ -82,7 +86,8 @@ pub fn unit_proximity_interaction_system(
             Proximity::Intersecting => {
                 let e1 = *(bh_to_e.0.get(&prox_event.collider1).expect("get"));
                 let e2 = *(bh_to_e.0.get(&prox_event.collider2).expect("get"));
-                if units.get_component::<UnitComponent>(e1).is_ok() && units.get_component::<UnitComponent>(e2).is_ok()
+                if units.get_component::<UnitComponent>(e1).is_ok()
+                    && units.get_component::<UnitComponent>(e2).is_ok()
                 {
                     match (e_to_ct.0.get(&e1).unwrap(), e_to_ct.0.get(&e2).unwrap()) {
                         (Melee, Melee) => {
@@ -111,27 +116,6 @@ pub fn unit_proximity_interaction_system(
 
     for contact in contacts {
         unit_events.send(UnitInteractionEvent::Proximity(contact));
-    }
-}
-
-/// Keeps BodyHandleToEntity resource in sync.
-// TODO: handle removals.
-pub fn body_to_entity_system(
-    mut bh_to_e: ResMut<BodyHandleToEntity>,
-    mut e_to_bh: ResMut<EntityToBodyHandle>,
-    mut e_to_ct: ResMut<EntityToColliderType>,
-    added: Query<(Entity, Added<RigidBodyHandleComponent>)>,
-    unit_missile: Query<&MissileWeaponComponent>,
-) {
-    for (entity, body_handle) in added.iter() {
-        log::debug!("new rigid body");
-        bh_to_e.0.insert(body_handle.handle(), entity);
-        e_to_bh.0.insert(entity, body_handle.handle());
-        let ct = match *unit_missile.get_component::<MissileWeaponComponent>(entity).unwrap() {
-            MissileWeaponComponent::None => ColliderType::Melee,
-            _ => ColliderType::FiringRange,
-        };
-        e_to_ct.0.insert(entity, ct);
     }
 }
 
@@ -164,15 +148,15 @@ pub fn physics_debug_system(
     colliders: ResMut<ColliderSet>,
     query: Query<(Entity, &RigidBodyHandleComponent)>,
 ) {
-    debug_timer.0.tick(time.delta_seconds);
-    if debug_timer.0.finished {
+    debug_timer.0.tick(time.delta_seconds());
+    if debug_timer.0.finished() {
         for (entity, body_handle) in query.iter() {
             let body = bodies.get_mut(body_handle.handle()).expect("body");
             log::trace!(
                 "entity {:?} at ({}, {}). sleeping: {}",
                 entity,
-                body.position.translation.x,
-                body.position.translation.y,
+                body.position().translation.x,
+                body.position().translation.y,
                 body.is_sleeping()
             );
         }
